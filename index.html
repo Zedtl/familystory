@@ -1,0 +1,1854 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>来听小董讲故事</title>
+<style>
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{margin:0;background:#111;overflow:hidden;
+    display:flex;align-items:center;justify-content:center;
+    font-family:monospace}
+  #stage{position:relative;width:min(96vw,1000px);height:min(70vh,640px);
+    min-height:400px;overflow:hidden}
+
+  #sceneLayer{position:absolute;inset:0;cursor:pointer}
+  #scene{position:absolute;inset:0;width:100%;height:100%;
+    image-rendering:pixelated;transition:opacity .5s}
+  .actor{position:absolute;bottom:-10%;
+    transform:translateX(-50%);
+    transition:left 1.2s ease-in-out, opacity .5s;
+    animation:bob .5s steps(2) infinite;z-index:5}
+  .actor img{display:block;image-rendering:pixelated;
+    image-rendering:crisp-edges;transition:opacity .3s,filter .3s}
+  @keyframes bob{
+    0%{transform:translateX(-50%) translateY(0)}
+    100%{transform:translateX(-50%) translateY(-6px)}
+  }
+  .actor.slant{animation:none;
+    transform:translateX(-50%) rotate(-8deg) translateY(-10px)}
+  /* 轨道：中心定位 */
+  .actor.orbit{animation:none;transition:none;z-index:6;
+    transform:translate(-50%,-50%)}
+  .actor.noBob{animation:none;transform-origin:bottom center}
+  @keyframes dropIn{
+    0%{transform:translateX(-50%) translateY(-500px);opacity:0}
+    20%{opacity:1}
+    100%{transform:translateX(-50%) translateY(0)}
+  }
+  .actor.drop{animation:dropIn .9s cubic-bezier(.5,0,1,1) forwards}
+  @keyframes walkBack{
+    0%,100%{transform:translateX(-50%) translateX(-30px)}
+    50%{transform:translateX(-50%) translateX(30px)}
+  }
+  .actor.walk{animation:walkBack 2.5s ease-in-out infinite}
+  @keyframes skateLeftRight{
+    0%{transform:translateX(-50%) translateX(0) rotate(0)}
+    25%{transform:translateX(-50%) translateX(-40px) rotate(-4deg)}
+    50%{transform:translateX(-50%) translateX(0) rotate(0)}
+    75%{transform:translateX(-50%) translateX(40px) rotate(4deg)}
+    100%{transform:translateX(-50%) translateX(0) rotate(0)}
+  }
+  .actor.skate{animation:skateLeftRight 4s ease-in-out infinite}
+
+  #bubble{position:absolute;padding:12px 16px;background:#fff;color:#111;
+    border:5px solid #111;font-size:17px;max-width:55%;opacity:0;
+    transition:opacity .3s;z-index:10;line-height:1.5;
+    box-shadow:5px 5px 0 rgba(0,0,0,.3);font-weight:bold}
+  #bubble.show{opacity:1}
+  #bubble::after{content:'';position:absolute;
+    left:50%;margin-left:-7px;bottom:-15px;
+    border:7px solid transparent;border-top-color:#111}
+
+  #narr{position:absolute;left:0;right:0;bottom:2%;text-align:center;
+    color:#fff;font-size:20px;padding:0 24px;
+    opacity:0;transition:opacity .4s;z-index:9;line-height:1.7;
+    text-shadow:
+      2px 0 0 #000, -2px 0 0 #000, 0 2px 0 #000, 0 -2px 0 #000,
+      2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000;}
+  #narr.show{opacity:1}
+  #narr span{background:rgba(0,0,0,.65);padding:6px 14px;
+    border-radius:4px;display:inline-block}
+
+  #title{position:absolute;left:16px;top:14px;color:#fff;font-size:15px;
+    text-shadow:2px 2px 0 #000;z-index:11;font-weight:bold}
+
+  #chapterScreen{
+    position:absolute;inset:0;
+    background:linear-gradient(#0a0a1a,#1a1a3a);
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    z-index:50;opacity:0;transition:opacity .5s;pointer-events:none}
+  #chapterScreen.show{opacity:1;pointer-events:auto}
+  #chapterScreen .num{
+  font-size:64px;color:#ffd966;font-weight:bold;
+  text-shadow:4px 4px 0 #000;margin-bottom:16px;font-family:serif}
+  #chapterScreen .num:empty{display:none}
+  #chapterScreen .name{
+  font-size:24px;color:#fff;letter-spacing:2px;
+  text-shadow:3px 3px 0 #000;font-family:serif;
+  text-align:center;padding:0 40px;line-height:1.7;max-width:720px}
+  #chapterScreen .line{
+    width:120px;height:4px;background:#ffd966;margin-top:24px}
+
+  #controls{position:absolute;right:16px;top:14px;z-index:25;
+    display:flex;gap:20px}
+  #controls button{
+    font-family:monospace;font-size:14px;padding:4px 0;
+    background:transparent;color:#fff;border:none;cursor:pointer;
+    font-weight:bold;text-decoration:underline;
+    text-shadow:1px 1px 0 #000}
+  #controls button:active{transform:translate(1px,1px)}
+  #controls button:disabled{opacity:.35;cursor:default;text-decoration:none}
+
+  .snow{position:absolute;width:4px;height:4px;background:#fff;
+    border-radius:50%;opacity:.85;animation:fall linear infinite;z-index:6}
+  @keyframes fall{
+    from{transform:translateY(-10px)}
+    to{transform:translateY(420px)}
+  }
+  .fw{position:absolute;width:7px;height:7px;border-radius:50%;
+    animation:boom 1.2s ease-out forwards;z-index:7}
+  @keyframes boom{
+    0%{transform:translate(0,0) scale(1);opacity:1}
+    100%{transform:translate(var(--dx),var(--dy)) scale(.2);opacity:0}
+  }
+  .bag{position:absolute;z-index:4;
+    animation:bagPulse 2s ease-in-out infinite;transform-origin:center}
+  @keyframes bagPulse{
+    0%,100%{transform:scale(1)}
+    50%{transform:scale(1.05)}
+  }
+  .umbrella{position:absolute;z-index:8;
+    animation:umbrellaIn .8s ease-out forwards;
+    transform-origin:center bottom;opacity:0}
+  @keyframes umbrellaIn{
+    0%{transform:scale(0) rotate(-20deg);opacity:0}
+    60%{transform:scale(1.1) rotate(5deg);opacity:1}
+    100%{transform:scale(1) rotate(0);opacity:1}
+  }
+  .award-fx,.cert-fx{position:absolute;left:50%;
+    transform:translateX(-50%);z-index:20;transition:top 1.5s ease-out}
+  .award-fx{top:-180px}
+  .cert-fx{top:-200px}
+  .prop{position:absolute;z-index:6;opacity:0;transition:opacity .5s}
+  .prop.show{opacity:1}
+  @keyframes sweepMove{
+    0%,100%{transform:rotate(-15deg)}
+    50%{transform:rotate(15deg)}
+  }
+  @keyframes scarfPop{
+    0%{transform:translate(-50%,-50%) scale(0);opacity:0}
+    50%{transform:translate(-50%,-50%) scale(1.5);opacity:1}
+    100%{transform:translate(-50%,-50%) scale(1.2);opacity:1}
+  }
+  @keyframes heartGlow{
+    0%,100%{transform:translate(-50%,-50%) scale(1);
+      filter:drop-shadow(0 0 15px #ff4d4d) drop-shadow(0 0 30px #ff8ab4)}
+    50%{transform:translate(-50%,-50%) scale(1.08);
+      filter:drop-shadow(0 0 30px #ff4d4d) drop-shadow(0 0 60px #ff8ab4)}
+  }
+  @keyframes photoFlash{
+    0%,100%{opacity:0}
+    50%{opacity:.9}
+  }
+  @keyframes fadeToWhite{
+    from{opacity:0}
+    to{opacity:1}
+  }
+
+  .hidden{display:none!important}
+
+  #quizScreen{
+    position:absolute;inset:0;
+    background:linear-gradient(#2a2a3a,#1a1a28);
+    padding:28px;display:none;
+    flex-direction:column;justify-content:center;
+    z-index:60;overflow-y:auto}
+  #quizScreen.show{display:flex}
+  #quizScreen .q{font-size:16px;color:#fff;margin:0 0 16px;line-height:1.6}
+  #quizScreen .opts{display:flex;flex-direction:column;gap:10px}
+  #quizScreen .opt{padding:12px 16px;background:#2f2f45;
+    border:3px solid #555;color:#eee;font-family:monospace;font-size:15px;
+    cursor:pointer;text-align:left;transition:all .15s}
+  #quizScreen .opt:hover{background:#3a3a55;border-color:#8ab4d8}
+
+  #replyScreen{
+    position:absolute;inset:0;
+    display:flex;flex-direction:column;
+    align-items:center;justify-content:center;
+    padding:32px;text-align:center;z-index:70;
+    animation:fadeIn .4s}
+  @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+  #replyScreen.good{background:linear-gradient(#1a3a2a,#0f2418)}
+  #replyScreen.soft{background:linear-gradient(#2a2a3a,#1f1f2e)}
+  #replyScreen .tag{
+    font-size:13px;letter-spacing:4px;margin-bottom:18px}
+  #replyScreen.good .tag{color:#4aca6a}
+  #replyScreen.soft .tag{color:#8ab4d8}
+  #replyScreen .msg{
+    font-size:17px;line-height:1.9;color:#fff;
+    max-width:560px;margin-bottom:30px}
+  #replyScreen .btns{display:flex;gap:12px}
+  #replyScreen button{
+    padding:12px 24px;background:#ffd966;color:#111;
+    border:3px solid #111;font-family:monospace;font-size:15px;
+    cursor:pointer;font-weight:bold}
+  #replyScreen button:active{transform:translate(1px,1px)}
+
+  /* ========== 全家福 ========== */
+  #familyLayer{position:absolute;inset:0;z-index:80;display:none;overflow:hidden}
+  #familyLayer.show{display:block}
+  #familyLayer .fam-sky{position:absolute;inset:0;
+    background:linear-gradient(#a8d8f0 0%,#c8e8ff 60%,#e0f4ff 100%)}
+  #familyLayer .fam-sun{position:absolute;top:8%;right:10%;
+    width:90px;height:90px;border-radius:50%;
+    background:radial-gradient(circle,#fff8a0 0%,#ffe680 50%,rgba(255,230,128,0) 80%);
+    box-shadow:0 0 60px #ffe680}
+  #familyLayer .msg{
+    position:absolute;top:5%;left:50%;transform:translateX(-50%);
+    color:#333;font-size:19px;text-align:center;width:90%;
+    text-shadow:1px 1px 0 #fff,0 0 8px #fff;
+    font-weight:bold;line-height:1.6;z-index:5}
+  #familyLayer .fam-group{position:absolute;left:50%;top:52%;
+    width:0;height:0;
+    transform:translate(-50%,-50%) scale(1);
+    transition:transform 1.5s ease-in-out}
+  #familyLayer .fam-photo-bg{
+    position:absolute;left:50%;top:50%;
+    width:720px;height:580px;
+    margin-left:-360px;margin-top:-290px;
+    background:#fff;
+    border:6px solid #fff;
+    box-shadow:0 0 40px rgba(0,0,0,.25);
+    transform:rotate(10deg) scale(0);
+    transition:transform 1.2s ease-out;
+    z-index:1}
+  #familyLayer .fam-photo-bg.grow{transform:rotate(10deg) scale(1)}
+  #familyLayer .fam-people{position:absolute;left:0;top:0;
+    width:0;height:0;z-index:2}
+  .photoActor{position:absolute;transform:translate(-50%,-100%);
+    transition:opacity .5s}
+  .photoActor img{display:block;image-rendering:pixelated;
+    image-rendering:crisp-edges}
+  #familyFlash{position:absolute;inset:0;background:#fff;
+    opacity:0;pointer-events:none;z-index:81}
+  #familyFlash.flash{animation:photoFlash .8s ease-in-out}
+  #whiteOut{position:absolute;inset:0;background:#fff;opacity:0;
+    z-index:90;display:none;pointer-events:none}
+  #whiteOut.show{display:block;animation:fadeToWhite 2s ease-in forwards}
+  #finalText{position:absolute;inset:0;display:flex;
+    align-items:center;justify-content:center;
+    color:#111;font-size:36px;font-family:serif;
+    letter-spacing:8px;opacity:0;
+    z-index:91;pointer-events:none;
+    transition:opacity 1.5s ease-in}
+  #finalText.show{opacity:1}
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <div id="sceneLayer">
+    <svg id="scene" viewBox="0 0 320 200" preserveAspectRatio="none"></svg>
+    <div id="actors"></div>
+    <div id="bubble"></div>
+    <div id="narr"></div>
+    <div id="title"></div>
+  </div>
+
+  <div id="chapterScreen">
+    <div class="num" id="chNum">0</div>
+    <div class="name" id="chName">出生</div>
+    <div class="line"></div>
+  </div>
+
+  <div id="controls">
+    <button id="btnPrev">← 上一页</button>
+    <button id="btnNext">下一页 →</button>
+  </div>
+
+  <div id="quizScreen"><div id="quizBody"></div></div>
+  <div id="replyScreen" class="hidden"></div>
+
+  <div id="familyLayer">
+    <div class="fam-sky"></div>
+    <div class="fam-sun"></div>
+    <div class="fam-group" id="famGroup">
+      <div class="fam-photo-bg" id="famPhotoBg"></div>
+      <div class="fam-people" id="famPeople"></div>
+    </div>
+    <div class="msg">感谢家人们的陪伴，<br>最后让我们一起拍张云端全家福吧！</div>
+  </div>
+  <div id="familyFlash"></div>
+  <div id="whiteOut"></div>
+  <div id="finalText">未完待续...</div>
+
+</div>
+
+<script>
+/* ============================================================ */
+var FRAME_MS = 400;
+var SIZE = 480;
+var BABY_SIZE = 600;
+var DAD_SIZE = 560;
+
+var SPRITES = {
+  me:      { frames:['me1.png',      'me2.png'],      fallback:'#5b9bd5' },
+  minfant: { frames:['minfant1.png', 'minfant2.png'], fallback:'#ffd966' },
+  meboy:   { frames:['meboy1.png',   'meboy2.png'],   fallback:'#7ab85a' },
+  mom:     { frames:['mom1.png',     'mom2.png'],     fallback:'#c0392b' },
+  dad:     { frames:['dad1.png',     'dad2.png'],     fallback:'#4a7fb5' },
+  lang:    { frames:['lang1.png',    'lang2.png'],    fallback:'#3a6ea5' },
+  melody:  { frames:['melody1.png',  'melody2.png'],  fallback:'#c0392b' }
+};
+
+function fallbackSVG(color){
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">' +
+    '<rect x="10" y="0" width="12" height="2" fill="'+color+'"/>' +
+    '<rect x="9" y="2" width="14" height="3" fill="'+color+'"/>' +
+    '<rect x="9" y="5" width="14" height="1" fill="#000"/>' +
+    '<rect x="9" y="6" width="14" height="3" fill="#1a1a1a"/>' +
+    '<rect x="11" y="9" width="10" height="8" fill="#f2c29b"/>' +
+    '<rect x="13" y="11" width="2" height="2" fill="#1a1a1a"/>' +
+    '<rect x="17" y="11" width="2" height="2" fill="#1a1a1a"/>' +
+    '<rect x="14" y="14" width="4" height="1" fill="#c0392b"/>' +
+    '<rect x="11" y="17" width="10" height="9" fill="'+color+'"/>' +
+    '<rect x="13" y="17" width="6" height="9" fill="#1a1a1a"/>' +
+    '<rect x="11" y="26" width="10" height="4" fill="#2a2a2a"/>' +
+    '<rect x="12" y="30" width="4" height="2" fill="#e0c0a0"/>' +
+    '<rect x="17" y="30" width="4" height="2" fill="#e0c0a0"/>' +
+    '</svg>'
+  );
+}
+
+/* ================= 背景库 ================= */
+var BG = {
+  space:
+    '<rect width="320" height="200" fill="#0a0a1a"/>'+
+    '<circle cx="30" cy="30" r="1" fill="#fff"/>'+
+    '<circle cx="80" cy="50" r="1" fill="#fff"/>'+
+    '<circle cx="140" cy="20" r="1" fill="#fff"/>'+
+    '<circle cx="200" cy="40" r="1" fill="#fff"/>'+
+    '<circle cx="260" cy="25" r="1" fill="#fff"/>'+
+    '<circle cx="300" cy="55" r="1" fill="#fff"/>'+
+    '<circle cx="50" cy="80" r="1" fill="#fff"/>'+
+    '<circle cx="110" cy="70" r="1" fill="#fff"/>'+
+    '<circle cx="230" cy="75" r="1" fill="#fff"/>'+
+    '<circle cx="280" cy="90" r="1" fill="#fff"/>'+
+    '<circle cx="160" cy="30" r="10" fill="#4a7fb5"/>'+
+    '<circle cx="155" cy="26" r="2" fill="#6a9fd5"/>'+
+    '<circle cx="165" cy="34" r="1.5" fill="#6a9fd5"/>'+
+    '<path d="M0 175 Q160 155 320 175 L320 200 L0 200 Z" fill="#3a6ea5"/>'+
+    '<path d="M0 175 Q160 155 320 175" stroke="#5b9bd5" stroke-width="2" fill="none"/>'+
+    '<circle cx="60" cy="180" r="2" fill="#4a9a3a"/>'+
+    '<circle cx="160" cy="168" r="2" fill="#4a9a3a"/>'+
+    '<circle cx="260" cy="180" r="2" fill="#4a9a3a"/>',
+
+  home:
+    '<rect width="320" height="200" fill="#f5efe5"/>'+
+    '<rect y="150" width="320" height="50" fill="#b07a4a"/>'+
+    '<g stroke="#8a5a30" stroke-width="1">'+
+    '<line x1="0" y1="165" x2="320" y2="165"/>'+
+    '<line x1="0" y1="180" x2="320" y2="180"/>'+
+    '</g>'+
+    '<rect x="60" y="30" width="80" height="60" fill="#8ec4e8" stroke="#6a4a2a" stroke-width="3"/>'+
+    '<line x1="100" y1="30" x2="100" y2="90" stroke="#6a4a2a" stroke-width="2"/>'+
+    '<line x1="60" y1="60" x2="140" y2="60" stroke="#6a4a2a" stroke-width="2"/>'+
+    '<rect x="56" y="26" width="8" height="68" fill="#c0392b"/>'+
+    '<rect x="136" y="26" width="8" height="68" fill="#c0392b"/>'+
+    '<rect x="190" y="115" width="100" height="35" fill="#8a5a30" stroke="#6a4a2a" stroke-width="2"/>'+
+    '<rect x="190" y="115" width="100" height="5" fill="#a06a3a"/>'+
+    '<rect x="200" y="150" width="6" height="18" fill="#6a4a2a"/>'+
+    '<rect x="275" y="150" width="6" height="18" fill="#6a4a2a"/>',
+
+  living:
+    '<rect width="320" height="200" fill="#f0d8b0"/>'+
+    '<g stroke="#e0c090" stroke-width="1" opacity="0.5">'+
+    '<line x1="0" y1="30" x2="320" y2="30"/>'+
+    '<line x1="0" y1="60" x2="320" y2="60"/>'+
+    '</g>'+
+    '<rect y="150" width="320" height="50" fill="#9a5a30"/>'+
+    '<g stroke="#7a3a10" stroke-width="1">'+
+    '<line x1="0" y1="170" x2="320" y2="170"/>'+
+    '<line x1="0" y1="188" x2="320" y2="188"/>'+
+    '</g>'+
+    '<ellipse cx="160" cy="180" rx="140" ry="14" fill="#c0392b" opacity="0.7"/>'+
+    '<ellipse cx="160" cy="180" rx="120" ry="10" fill="#e05555" opacity="0.6"/>'+
+    '<rect x="30" y="20" width="55" height="42" fill="#8ec4e8" stroke="#6a4a2a" stroke-width="3"/>'+
+    '<circle cx="57" cy="38" r="7" fill="#f0c040"/>'+
+    '<path d="M35 55 L50 42 L65 50 L75 40 L80 55 Z" fill="#4a9a3a"/>'+
+    '<circle cx="240" cy="35" r="16" fill="#fff8e0" stroke="#6a4a2a" stroke-width="3"/>'+
+    '<line x1="240" y1="35" x2="240" y2="26" stroke="#333" stroke-width="2"/>'+
+    '<line x1="240" y1="35" x2="247" y2="38" stroke="#333" stroke-width="1.5"/>'+
+    '<circle cx="240" cy="35" r="2" fill="#333"/>'+
+    '<rect x="20" y="115" width="110" height="35" fill="#4a7fb5" stroke="#3a6ea5" stroke-width="2"/>'+
+    '<rect x="15" y="105" width="120" height="15" fill="#3a6ea5" stroke="#2a5a8a" stroke-width="2"/>'+
+    '<rect x="20" y="105" width="25" height="25" fill="#5b8fc5"/>'+
+    '<rect x="105" y="105" width="25" height="25" fill="#5b8fc5"/>'+
+    '<rect x="35" y="118" width="20" height="14" fill="#e8c060"/>'+
+    '<rect x="85" y="118" width="20" height="14" fill="#e8c060"/>'+
+    '<rect x="140" y="135" width="70" height="6" fill="#8a5a30"/>'+
+    '<rect x="140" y="141" width="70" height="3" fill="#6a4a2a"/>'+
+    '<rect x="146" y="144" width="4" height="14" fill="#6a4a2a"/>'+
+    '<rect x="200" y="144" width="4" height="14" fill="#6a4a2a"/>'+
+    '<rect x="150" y="126" width="14" height="9" fill="#fff8e0" stroke="#c0392b" stroke-width="1"/>'+
+    '<ellipse cx="180" cy="132" rx="7" ry="3" fill="#fff" stroke="#8ab4d8" stroke-width="1"/>'+
+    '<rect x="225" y="128" width="80" height="22" fill="#6a4a2a"/>'+
+    '<rect x="225" y="128" width="80" height="4" fill="#8a6a4a"/>'+
+    '<rect x="235" y="70" width="60" height="55" fill="#1a1a1a" stroke="#000" stroke-width="2"/>'+
+    '<rect x="240" y="75" width="50" height="45" fill="#4a7fb5"/>'+
+    '<rect x="255" y="125" width="20" height="4" fill="#1a1a1a"/>'+
+    '<rect x="290" y="115" width="20" height="30" fill="#8a5a30" stroke="#6a4a2a" stroke-width="1"/>'+
+    '<circle cx="300" cy="105" r="14" fill="#3a9a3a"/>'+
+    '<circle cx="290" cy="112" r="9" fill="#4aaa4a"/>'+
+    '<circle cx="310" cy="112" r="9" fill="#4aaa4a"/>'+
+    '<circle cx="300" cy="98" r="8" fill="#5aba5a"/>',
+
+  kitchen:
+    '<rect width="320" height="200" fill="#f0e0c8"/>'+
+    '<g stroke="#e0ceb0" stroke-width="1" fill="none">'+
+    '<line x1="0" y1="20" x2="320" y2="20"/>'+
+    '<line x1="0" y1="40" x2="320" y2="40"/>'+
+    '<line x1="0" y1="60" x2="320" y2="60"/>'+
+    '<line x1="0" y1="80" x2="320" y2="80"/>'+
+    '<line x1="0" y1="100" x2="320" y2="100"/>'+
+    '<line x1="20" y1="0" x2="20" y2="110"/>'+
+    '<line x1="40" y1="0" x2="40" y2="110"/>'+
+    '<line x1="60" y1="0" x2="60" y2="110"/>'+
+    '<line x1="80" y1="0" x2="80" y2="110"/>'+
+    '</g>'+
+    '<rect x="15" y="15" width="70" height="60" fill="#8ec4e8" stroke="#6a4a2a" stroke-width="3"/>'+
+    '<line x1="50" y1="15" x2="50" y2="75" stroke="#6a4a2a" stroke-width="2"/>'+
+    '<line x1="15" y1="45" x2="85" y2="45" stroke="#6a4a2a" stroke-width="2"/>'+
+    '<rect x="11" y="12" width="8" height="68" fill="#c0392b"/>'+
+    '<rect x="82" y="12" width="8" height="68" fill="#c0392b"/>'+
+    '<rect x="105" y="10" width="90" height="35" fill="#a0a0a0" stroke="#666" stroke-width="2"/>'+
+    '<rect x="110" y="42" width="80" height="8" fill="#c0c0c0" stroke="#888" stroke-width="1"/>'+
+    '<rect x="205" y="15" width="100" height="50" fill="#8a5a30" stroke="#5a3a18" stroke-width="2"/>'+
+    '<line x1="255" y1="15" x2="255" y2="65" stroke="#5a3a18" stroke-width="2"/>'+
+    '<circle cx="245" cy="40" r="2" fill="#d4a843"/>'+
+    '<circle cx="265" cy="40" r="2" fill="#d4a843"/>'+
+    '<rect y="110" width="320" height="10" fill="#c0c0c0"/>'+
+    '<rect y="108" width="320" height="3" fill="#e8e8e8"/>'+
+    '<rect x="100" y="100" width="100" height="10" fill="#333" stroke="#111" stroke-width="1"/>'+
+    '<circle cx="125" cy="105" r="7" fill="#1a1a1a" stroke="#444" stroke-width="1"/>'+
+    '<circle cx="125" cy="105" r="3" fill="#666"/>'+
+    '<circle cx="175" cy="105" r="7" fill="#1a1a1a" stroke="#444" stroke-width="1"/>'+
+    '<circle cx="175" cy="105" r="3" fill="#666"/>'+
+    '<ellipse cx="125" cy="92" rx="14" ry="7" fill="#2a2a2a" stroke="#000" stroke-width="1"/>'+
+    '<rect x="135" y="88" width="14" height="3" fill="#2a2a2a"/>'+
+    '<ellipse cx="125" cy="90" rx="12" ry="5" fill="#3a3a3a"/>'+
+    '<rect x="205" y="82" width="32" height="28" fill="#e8e8e8" stroke="#a0a0a0" stroke-width="2"/>'+
+    '<rect x="203" y="78" width="36" height="6" fill="#c0c0c0" stroke="#888" stroke-width="1"/>'+
+    '<rect x="208" y="90" width="8" height="4" fill="#c0392b"/>'+
+    '<rect x="220" y="90" width="8" height="4" fill="#4a9a3a"/>'+
+    '<rect x="15" y="112" width="60" height="6" fill="#a0a0a0" stroke="#666" stroke-width="1"/>'+
+    '<rect x="20" y="113" width="50" height="3" fill="#707070"/>'+
+    '<rect x="42" y="102" width="4" height="12" fill="#aaa"/>'+
+    '<rect x="36" y="100" width="16" height="3" fill="#aaa"/>'+
+    '<rect y="120" width="320" height="80" fill="#a06a3a"/>'+
+    '<rect y="120" width="320" height="80" fill="none" stroke="#6a4a2a" stroke-width="2"/>'+
+    '<line x1="80" y1="120" x2="80" y2="200" stroke="#6a4a2a" stroke-width="2"/>'+
+    '<line x1="160" y1="120" x2="160" y2="200" stroke="#6a4a2a" stroke-width="2"/>'+
+    '<line x1="240" y1="120" x2="240" y2="200" stroke="#6a4a2a" stroke-width="2"/>'+
+    '<rect x="70" y="150" width="3" height="10" fill="#d4a843"/>'+
+    '<rect x="90" y="150" width="3" height="10" fill="#d4a843"/>'+
+    '<rect x="150" y="150" width="3" height="10" fill="#d4a843"/>'+
+    '<rect x="170" y="150" width="3" height="10" fill="#d4a843"/>'+
+    '<rect x="280" y="15" width="40" height="105" fill="#e8e8e8" stroke="#a0a0a0" stroke-width="2"/>'+
+    '<line x1="280" y1="55" x2="320" y2="55" stroke="#a0a0a0" stroke-width="2"/>'+
+    '<rect x="312" y="30" width="3" height="12" fill="#666"/>'+
+    '<rect x="312" y="70" width="3" height="12" fill="#666"/>'+
+    '<rect x="250" y="98" width="6" height="12" fill="#c0392b"/>'+
+    '<rect x="251" y="95" width="4" height="3" fill="#8a2a20"/>'+
+    '<rect x="260" y="100" width="6" height="10" fill="#4a7fb5"/>'+
+    '<rect x="261" y="97" width="4" height="3" fill="#2a5a8a"/>',
+
+  bedroom:
+    '<rect width="320" height="200" fill="#f5efe5"/>'+
+    '<rect y="150" width="320" height="50" fill="#a87040"/>'+
+    '<g stroke="#8a5a30" stroke-width="1">'+
+    '<line x1="0" y1="170" x2="320" y2="170"/>'+
+    '<line x1="0" y1="188" x2="320" y2="188"/>'+
+    '</g>'+
+    '<g stroke="#e0d5c5" stroke-width="1" opacity="0.6">'+
+    '<line x1="0" y1="30" x2="320" y2="30"/>'+
+    '<line x1="0" y1="60" x2="320" y2="60"/>'+
+    '<line x1="0" y1="90" x2="320" y2="90"/>'+
+    '</g>'+
+    '<rect x="130" y="15" width="60" height="45" fill="#8ec4e8" stroke="#6a4a2a" stroke-width="3"/>'+
+    '<circle cx="160" cy="32" r="8" fill="#f0c040"/>'+
+    '<path d="M135 55 L150 42 L168 50 L180 42 L185 55 Z" fill="#4a9a3a"/>'+
+    '<rect x="5" y="70" width="55" height="105" fill="#8a5a30" stroke="#5a3a18" stroke-width="2"/>'+
+    '<line x1="32" y1="70" x2="32" y2="175" stroke="#5a3a18" stroke-width="2"/>'+
+    '<circle cx="25" cy="120" r="2" fill="#d4a843"/>'+
+    '<circle cx="39" cy="120" r="2" fill="#d4a843"/>'+
+    '<rect x="75" y="120" width="160" height="55" fill="#a87040" stroke="#6a4a2a" stroke-width="2"/>'+
+    '<rect x="75" y="112" width="160" height="12" fill="#e8e0d0"/>'+
+    '<rect x="80" y="108" width="40" height="15" fill="#fff" stroke="#c0c0c0" stroke-width="1"/>'+
+    '<rect x="125" y="106" width="40" height="17" fill="#fff" stroke="#c0c0c0" stroke-width="1"/>'+
+    '<rect x="75" y="130" width="160" height="45" fill="#c0392b" stroke="#8a2a20" stroke-width="2"/>'+
+    '<rect x="75" y="135" width="160" height="8" fill="#e05555"/>'+
+    '<rect x="78" y="172" width="6" height="5" fill="#6a4a2a"/>'+
+    '<rect x="226" y="172" width="6" height="5" fill="#6a4a2a"/>'+
+    '<rect x="245" y="130" width="45" height="45" fill="#8a5a30" stroke="#5a3a18" stroke-width="2"/>'+
+    '<line x1="245" y1="152" x2="290" y2="152" stroke="#5a3a18" stroke-width="1"/>'+
+    '<circle cx="260" cy="142" r="2" fill="#d4a843"/>'+
+    '<circle cx="260" cy="163" r="2" fill="#d4a843"/>'+
+    '<rect x="262" y="115" width="14" height="15" fill="#f0c040" stroke="#8a5a30" stroke-width="1"/>'+
+    '<rect x="267" y="105" width="4" height="12" fill="#8a5a30"/>'+
+    '<ellipse cx="269" cy="103" rx="10" ry="6" fill="#fff8a0"/>'+
+    '<circle cx="269" cy="103" r="30" fill="#fff8a0" opacity="0.15"/>',
+
+  workcorner:
+    '<rect width="320" height="200" fill="#e8ddd0"/>'+
+    '<rect y="150" width="320" height="50" fill="#8a5a30"/>'+
+    '<g stroke="#6a4a2a" stroke-width="1">'+
+    '<line x1="0" y1="170" x2="320" y2="170"/>'+
+    '<line x1="0" y1="188" x2="320" y2="188"/>'+
+    '</g>'+
+    '<rect x="90" y="115" width="160" height="8" fill="#6a4a2a"/>'+
+    '<rect x="90" y="123" width="160" height="3" fill="#4a2a0a"/>'+
+    '<rect x="95" y="123" width="6" height="35" fill="#4a2a0a"/>'+
+    '<rect x="239" y="123" width="6" height="35" fill="#4a2a0a"/>'+
+    '<rect x="115" y="55" width="70" height="55" fill="#c0c0a8" stroke="#8a8a70" stroke-width="2"/>'+
+    '<rect x="120" y="60" width="60" height="45" fill="#1a3a5a"/>'+
+    '<rect x="125" y="65" width="50" height="3" fill="#4aca6a"/>'+
+    '<rect x="125" y="72" width="40" height="2" fill="#fff"/>'+
+    '<rect x="125" y="77" width="46" height="2" fill="#fff"/>'+
+    '<rect x="125" y="82" width="35" height="2" fill="#fff"/>'+
+    '<rect x="145" y="110" width="10" height="8" fill="#a0a090"/>'+
+    '<rect x="200" y="105" width="45" height="45" fill="#d0d0b8" stroke="#8a8a70" stroke-width="2"/>'+
+    '<rect x="210" y="112" width="25" height="8" fill="#8a8a70"/>'+
+    '<circle cx="220" cy="135" r="3" fill="#4aca6a"/>'+
+    '<rect x="210" y="140" width="20" height="3" fill="#8a8a70"/>'+
+    '<rect x="115" y="128" width="60" height="14" fill="#e8e8d8" stroke="#8a8a70" stroke-width="1"/>'+
+    '<g stroke="#8a8a70" stroke-width="1">'+
+    '<line x1="117" y1="132" x2="173" y2="132"/>'+
+    '<line x1="117" y1="136" x2="173" y2="136"/>'+
+    '</g>'+
+    '<rect x="230" y="105" width="40" height="45" fill="#2a2a2a" stroke="#000" stroke-width="2"/>'+
+    '<rect x="235" y="100" width="30" height="10" fill="#2a2a2a" stroke="#000" stroke-width="2"/>'+
+    '<rect x="248" y="150" width="4" height="15" fill="#444"/>'+
+    '<rect x="240" y="165" width="20" height="3" fill="#444"/>'+
+    '<circle cx="243" cy="170" r="3" fill="#222"/>'+
+    '<circle cx="257" cy="170" r="3" fill="#222"/>',
+
+  stageSpotlight:
+    '<rect width="320" height="200" fill="#0a0a15"/>'+
+    '<circle cx="20" cy="180" r="1.5" fill="#fff8a0" opacity=".9"/>'+
+    '<circle cx="50" cy="185" r="1" fill="#8ec4e8" opacity=".8"/>'+
+    '<circle cx="80" cy="182" r="1.5" fill="#ff8ab4" opacity=".8"/>'+
+    '<circle cx="110" cy="186" r="1" fill="#fff8a0" opacity=".9"/>'+
+    '<circle cx="145" cy="184" r="1.5" fill="#8ec4e8" opacity=".8"/>'+
+    '<circle cx="180" cy="187" r="1" fill="#ff8ab4" opacity=".8"/>'+
+    '<circle cx="215" cy="183" r="1.5" fill="#fff8a0" opacity=".9"/>'+
+    '<circle cx="250" cy="186" r="1" fill="#8ec4e8" opacity=".8"/>'+
+    '<circle cx="285" cy="184" r="1.5" fill="#ff8ab4" opacity=".8"/>'+
+    '<circle cx="305" cy="180" r="1" fill="#fff8a0" opacity=".9"/>'+
+    '<ellipse cx="160" cy="172" rx="90" ry="10" fill="#2a2a3a"/>'+
+    '<path d="M100 0 L220 0 L200 170 L120 170 Z" fill="#fff8a0" opacity="0.2"/>'+
+    '<path d="M120 0 L200 0 L185 170 L135 170 Z" fill="#fff8a0" opacity="0.15"/>'+
+    '<circle cx="160" cy="0" r="40" fill="#fff8a0" opacity="0.4"/>',
+
+  cafe:
+    '<rect width="320" height="200" fill="#3a2a1a"/>'+
+    '<g stroke="#4a3a2a" stroke-width="1" opacity="0.5">'+
+    '<line x1="0" y1="40" x2="320" y2="40"/>'+
+    '<line x1="0" y1="80" x2="320" y2="80"/>'+
+    '</g>'+
+    '<rect y="150" width="320" height="50" fill="#2a1a0a"/>'+
+    '<g stroke="#1a0a00" stroke-width="1">'+
+    '<line x1="0" y1="170" x2="320" y2="170"/>'+
+    '<line x1="0" y1="188" x2="320" y2="188"/>'+
+    '</g>'+
+    '<rect x="0" y="105" width="80" height="45" fill="#6a4a2a" stroke="#4a2a0a" stroke-width="2"/>'+
+    '<rect x="0" y="100" width="80" height="8" fill="#8a6a4a"/>'+
+    '<rect x="15" y="70" width="30" height="30" fill="#999" stroke="#666" stroke-width="2"/>'+
+    '<rect x="20" y="75" width="20" height="15" fill="#555"/>'+
+    '<rect x="25" y="92" width="10" height="8" fill="#333"/>'+
+    '<rect x="55" y="92" width="8" height="10" fill="#fff"/>'+
+    '<rect x="63" y="94" width="3" height="6" fill="#fff"/>'+
+    '<rect x="55" y="90" width="8" height="2" fill="#8a5a30"/>'+
+    '<rect x="110" y="0" width="2" height="25" fill="#222"/>'+
+    '<path d="M95 25 L127 25 L122 40 L100 40 Z" fill="#c0392b"/>'+
+    '<circle cx="111" cy="42" r="4" fill="#fff8a0"/>'+
+    '<rect x="210" y="0" width="2" height="25" fill="#222"/>'+
+    '<path d="M195 25 L227 25 L222 40 L200 40 Z" fill="#c0392b"/>'+
+    '<circle cx="211" cy="42" r="4" fill="#fff8a0"/>'+
+    '<rect x="80" y="15" width="80" height="70" fill="#5a3a18" stroke="#3a1a08" stroke-width="2"/>'+
+    '<line x1="80" y1="38" x2="160" y2="38" stroke="#3a1a08" stroke-width="1"/>'+
+    '<line x1="80" y1="62" x2="160" y2="62" stroke="#3a1a08" stroke-width="1"/>'+
+    '<rect x="88" y="22" width="8" height="14" fill="#8a2a20"/>'+
+    '<rect x="102" y="20" width="8" height="16" fill="#4a7fb5"/>'+
+    '<rect x="116" y="24" width="8" height="12" fill="#c0a040"/>'+
+    '<rect x="130" y="20" width="8" height="16" fill="#4a9a3a"/>'+
+    '<rect x="144" y="22" width="8" height="14" fill="#8a2a20"/>'+
+    '<rect x="88" y="44" width="8" height="16" fill="#4a7fb5"/>'+
+    '<rect x="102" y="46" width="8" height="14" fill="#c0a040"/>'+
+    '<rect x="116" y="44" width="8" height="16" fill="#8a2a20"/>'+
+    '<rect x="130" y="46" width="8" height="14" fill="#4a7fb5"/>'+
+    '<rect x="144" y="44" width="8" height="16" fill="#4a9a3a"/>'+
+    '<rect x="200" y="130" width="80" height="6" fill="#8a6a4a"/>'+
+    '<rect x="205" y="136" width="6" height="20" fill="#5a3a18"/>'+
+    '<rect x="269" y="136" width="6" height="20" fill="#5a3a18"/>'+
+    '<rect x="225" y="124" width="10" height="10" fill="#fff"/>'+
+    '<rect x="235" y="126" width="3" height="6" fill="#fff"/>'+
+    '<rect x="240" y="128" width="20" height="5" fill="#e8d5a0"/>'+
+    '<rect x="285" y="115" width="25" height="45" fill="#6a4a2a" stroke="#4a2a0a" stroke-width="2"/>'+
+    '<rect x="288" y="118" width="19" height="15" fill="#4a2a0a"/>'+
+    '<rect x="288" y="138" width="19" height="15" fill="#4a2a0a"/>'+
+    '<ellipse cx="255" cy="128" rx="4" ry="1.5" fill="#fff"/>'+
+    '<rect x="252" y="122" width="6" height="6" fill="#fff"/>'+
+    '<rect x="258" y="124" width="2" height="4" fill="#fff"/>',
+
+  kidroom:
+    '<rect width="320" height="200" fill="#e8d8c8"/>'+
+    '<rect y="150" width="320" height="50" fill="#b08050"/>'+
+    '<rect x="20" y="100" width="60" height="50" fill="#8a5a30"/>'+
+    '<rect x="20" y="100" width="60" height="6" fill="#a06a3a"/>'+
+    '<rect x="220" y="60" width="80" height="90" fill="#6a4a2a"/>'+
+    '<line x1="260" y1="60" x2="260" y2="150" stroke="#4a2a0a" stroke-width="2"/>',
+
+  livingApple:
+    '<rect width="320" height="200" fill="#f5e6d0"/>'+
+    '<rect y="150" width="320" height="50" fill="#b07a4a"/>'+
+    '<rect x="30" y="120" width="80" height="30" fill="#c0392b"/>'+
+    '<rect x="25" y="115" width="90" height="12" fill="#a02a20"/>'+
+    '<rect x="140" y="115" width="90" height="35" fill="#6a4a2a"/>',
+
+  study:
+    '<rect width="320" height="200" fill="#e8dcc8"/>'+
+    '<rect y="150" width="320" height="50" fill="#8a5a30"/>'+
+    '<rect x="20" y="20" width="120" height="90" fill="#6a4a2a"/>'+
+    '<rect x="25" y="25" width="110" height="80" fill="#f5f0e0"/>'+
+    '<line x1="30" y1="40" x2="130" y2="40" stroke="#8ab4d8" stroke-width="1"/>'+
+    '<line x1="30" y1="55" x2="110" y2="55" stroke="#8ab4d8" stroke-width="1"/>'+
+    '<line x1="30" y1="70" x2="120" y2="70" stroke="#8ab4d8" stroke-width="1"/>'+
+    '<rect x="180" y="110" width="120" height="40" fill="#6a4a2a"/>',
+
+  livingPPT:
+    '<rect width="320" height="200" fill="#2a2a3a"/>'+
+    '<rect y="150" width="320" height="50" fill="#1a1a28"/>'+
+    '<rect x="60" y="130" width="200" height="25" fill="#3a2a1a"/>'+
+    '<rect x="70" y="30" width="180" height="105" fill="#0a0a0a"/>'+
+    '<rect x="78" y="38" width="164" height="89" fill="#1a2a4a"/>'+
+    '<rect x="95" y="50" width="130" height="8" fill="#fff"/>'+
+    '<rect x="95" y="70" width="90" height="5" fill="#8ab4d8"/>'+
+    '<rect x="95" y="82" width="110" height="5" fill="#8ab4d8"/>'+
+    '<rect x="200" y="65" width="30" height="6" fill="#e74c3c"/>'+
+    '<rect x="200" y="71" width="30" height="6" fill="#e67e22"/>'+
+    '<rect x="200" y="77" width="30" height="6" fill="#f1c40f"/>'+
+    '<rect x="200" y="83" width="30" height="6" fill="#2ecc71"/>'+
+    '<rect x="200" y="89" width="30" height="6" fill="#3498db"/>'+
+    '<rect x="200" y="95" width="30" height="6" fill="#9b59b6"/>'+
+    '<rect x="200" y="65" width="30" height="36" fill="none" stroke="#000" stroke-width="1"/>',
+
+  snowNight:
+    '<rect width="320" height="200" fill="#1a1a3a"/>'+
+    '<circle cx="270" cy="35" r="14" fill="#f0f0d0"/>'+
+    '<circle cx="265" cy="30" r="3" fill="#e0e0b0"/>'+
+    '<circle cx="276" cy="40" r="2" fill="#e0e0b0"/>'+
+    '<rect x="20" y="120" width="30" height="50" fill="#0f0f28"/>'+
+    '<rect x="60" y="100" width="25" height="70" fill="#0f0f28"/>'+
+    '<rect x="95" y="130" width="35" height="40" fill="#0f0f28"/>'+
+    '<rect x="140" y="110" width="28" height="60" fill="#0f0f28"/>'+
+    '<rect x="180" y="125" width="40" height="45" fill="#0f0f28"/>'+
+    '<rect x="230" y="105" width="30" height="65" fill="#0f0f28"/>'+
+    '<rect x="65" y="115" width="5" height="6" fill="#f0c040"/>'+
+    '<rect x="76" y="115" width="5" height="6" fill="#f0c040"/>'+
+    '<rect x="240" y="120" width="5" height="6" fill="#f0c040"/>'+
+    '<rect x="250" y="135" width="5" height="6" fill="#f0c040"/>'+
+    '<rect x="185" y="140" width="5" height="6" fill="#f0c040"/>'+
+    '<rect x="98" y="70" width="4" height="100" fill="#3a3a3a"/>'+
+    '<rect x="93" y="68" width="14" height="4" fill="#2a2a2a"/>'+
+    '<circle cx="100" cy="66" r="7" fill="#fff8a0"/>'+
+    '<circle cx="100" cy="66" r="16" fill="#fff8a0" opacity="0.15"/>'+
+    '<rect y="170" width="320" height="30" fill="#e8eef5"/>'+
+    '<rect y="168" width="320" height="4" fill="#ffffff"/>',
+
+  iceRiver:
+    '<rect width="320" height="200" fill="#0a0a2a"/>'+
+    '<circle cx="50" cy="30" r="10" fill="#f0f0d0"/>'+
+    '<rect y="150" width="320" height="50" fill="#8ec4e8"/>'+
+    '<rect y="150" width="320" height="4" fill="#c8e8ff"/>'+
+    '<line x1="0" y1="170" x2="320" y2="170" stroke="#6fa8dc" stroke-width="1"/>'+
+    '<line x1="0" y1="185" x2="320" y2="185" stroke="#6fa8dc" stroke-width="1"/>',
+
+  spring:
+    '<rect width="320" height="200" fill="#c8e8ff"/>'+
+    '<circle cx="270" cy="40" r="18" fill="#ffe680"/>'+
+    '<rect y="150" width="320" height="50" fill="#7ab85a"/>'+
+    '<rect x="40" y="110" width="10" height="40" fill="#6a4a2a"/>'+
+    '<circle cx="45" cy="105" r="22" fill="#4a9a3a"/>'+
+    '<circle cx="120" cy="160" r="3" fill="#ff8ab4"/>'+
+    '<circle cx="220" cy="162" r="3" fill="#ff8ab4"/>',
+
+  greatWall:
+    '<rect width="320" height="200" fill="#c8d8e8"/>'+
+    '<circle cx="60" cy="40" r="14" fill="#f0e8d0"/>'+
+    '<path d="M0 120 L50 80 L100 105 L160 70 L220 100 L280 75 L320 95 L320 200 L0 200 Z" fill="#7a8a9a"/>'+
+    '<path d="M0 130 L60 95 L120 115 L180 85 L240 110 L320 90 L320 200 L0 200 Z" fill="#6a7a8a"/>'+
+    '<path d="M0 170 L40 155 L80 150 L120 135 L160 130 L200 115 L240 110 L280 98 L320 95" '+
+    'stroke="#8a8a8a" stroke-width="14" fill="none" stroke-linecap="round"/>'+
+    '<g fill="#7a7a7a">'+
+    '<rect x="35" y="145" width="6" height="10"/>'+
+    '<rect x="75" y="140" width="6" height="10"/>'+
+    '<rect x="115" y="125" width="6" height="10"/>'+
+    '<rect x="155" y="120" width="6" height="10"/>'+
+    '<rect x="195" y="105" width="6" height="10"/>'+
+    '<rect x="235" y="100" width="6" height="10"/>'+
+    '</g>',
+
+  live:
+    '<rect width="320" height="200" fill="#2a1a3a"/>'+
+    '<circle cx="80" cy="50" r="22" fill="#ff8ab4" opacity=".5"/>'+
+    '<circle cx="240" cy="50" r="22" fill="#8ab4ff" opacity=".5"/>'+
+    '<rect x="60" y="20" width="200" height="110" fill="#4a2a5a"/>'+
+    '<circle cx="160" cy="70" r="40" fill="#6a3a7a"/>'+
+    '<rect y="140" width="320" height="60" fill="#1a0f28"/>',
+
+  choir:
+    '<rect width="320" height="200" fill="#3a2a1a"/>'+
+    '<path d="M0 0 L0 200 L40 200 L20 0 Z" fill="#8a1a1a"/>'+
+    '<path d="M320 0 L320 200 L280 200 L300 0 Z" fill="#8a1a1a"/>'+
+    '<rect x="0" y="0" width="320" height="30" fill="#6a1010"/>'+
+    '<rect y="150" width="320" height="50" fill="#6a4a2a"/>'+
+    '<g fill="#2a1a0a">'+
+    '<rect x="60" y="120" width="16" height="35"/><circle cx="68" cy="115" r="8"/>'+
+    '<rect x="100" y="120" width="16" height="35"/><circle cx="108" cy="115" r="8"/>'+
+    '<rect x="200" y="120" width="16" height="35"/><circle cx="208" cy="115" r="8"/>'+
+    '<rect x="240" y="120" width="16" height="35"/><circle cx="248" cy="115" r="8"/>'+
+    '</g>'+
+    '<text x="130" y="60" font-size="20" fill="#ffd966">♪</text>'+
+    '<text x="180" y="40" font-size="16" fill="#ffd966">♫</text>',
+
+  dance:
+    '<rect width="320" height="200" fill="#e8d8c8"/>'+
+    '<rect y="140" width="320" height="60" fill="#b08050"/>'+
+    '<line x1="0" y1="140" x2="320" y2="140" stroke="#8a5a30" stroke-width="2"/>'+
+    '<rect x="60" y="20" width="200" height="110" fill="#b8d8e8" stroke="#8a6a4a" stroke-width="4"/>'+
+    '<line x1="160" y1="20" x2="160" y2="130" stroke="#8a6a4a" stroke-width="2"/>'+
+    '<rect x="40" y="110" width="240" height="4" fill="#8a5a30"/>',
+
+  pool:
+    '<rect width="320" height="200" fill="#a8d8e8"/>'+
+    '<rect y="100" width="320" height="100" fill="#4a9ac8"/>'+
+    '<rect y="100" width="320" height="6" fill="#8ac8e8"/>'+
+    '<path d="M0 120 Q20 116 40 120 T80 120 T120 120 T160 120 T200 120 T240 120 T280 120 T320 120" stroke="#8ac8e8" stroke-width="2" fill="none"/>'+
+    '<line x1="0" y1="160" x2="320" y2="160" stroke="#c0392b" stroke-width="2" stroke-dasharray="10 5"/>'+
+    '<rect y="90" width="320" height="10" fill="#e8e8e8"/>',
+
+  stage:
+    '<rect width="320" height="200" fill="#1a1a3a"/>'+
+    '<circle cx="50" cy="30" r="10" fill="#f0f0d0"/>'+
+    '<path d="M0 100 L60 70 L120 90 L180 65 L240 85 L320 75 L320 120 L0 120 Z" fill="#2a2a3a"/>'+
+    '<rect x="40" y="120" width="240" height="80" fill="#6a4a2a"/>'+
+    '<rect x="60" y="126" width="200" height="74" fill="#8a1a1a"/>'+
+    '<rect x="60" y="30" width="200" height="90" fill="#c0392b"/>'+
+    '<text x="160" y="80" text-anchor="middle" font-size="18" fill="#ffd966" font-family="serif">乡村大舞台</text>'+
+    '<circle cx="80" cy="20" r="10" fill="#ff5555"/>'+
+    '<circle cx="240" cy="20" r="10" fill="#ff5555"/>',
+
+  awardBg:
+    '<rect width="320" height="200" fill="#f5e6d0"/>'+
+    '<rect y="150" width="320" height="50" fill="#d4a843"/>'
+};
+
+/* ================= 分镜脚本 ================= */
+var STEPS = [
+
+  /* ===== 章节 0 ===== */
+  { type:'chapter', num:'0', name:'出生' },
+  { bg:'space', title:'0 · 出生',
+    narr:'1995年10月30日，地球诞生45.5亿年，恐龙灭绝6600万年后，一个婴儿横空出世。' },
+  { bg:'space', title:'0 · 出生',
+    actors:[{id:'mom',pos:0.25},{id:'dad',pos:0.75,size:DAD_SIZE}] },
+  { bg:'space', title:'0 · 出生',
+    actors:[
+      {id:'mom',pos:0.25},
+      {id:'minfant',pos:0.5,size:BABY_SIZE,drop:true},
+      {id:'dad',pos:0.75,size:DAD_SIZE}
+    ] },
+  { bg:'home', title:'0 · 出生',
+    actors:[{id:'mom',pos:0.25},{id:'minfant',pos:0.5,size:BABY_SIZE},{id:'dad',pos:0.75,size:DAD_SIZE}],
+    narr:'罗女士和董先生端详许久……翻书许久……' },
+  { bg:'home', title:'0 · 出生',
+    actors:[{id:'mom',pos:0.25},{id:'minfant',pos:0.5,size:BABY_SIZE},{id:'dad',pos:0.75,size:DAD_SIZE}],
+    bubble:{who:'dad', text:'就叫他djz吧，逆水行舟不进则退。'} },
+  { bg:'home', title:'0 · 出生',
+    actors:[{id:'mom',pos:0.25},{id:'minfant',pos:0.5,size:BABY_SIZE},{id:'dad',pos:0.75,size:DAD_SIZE}],
+    bubble:{who:'mom', text:'洋气一点撒，叫Danny'} },
+  { bg:'home', title:'0 · 出生',
+    actors:[{id:'mom',pos:0.25},{id:'minfant',pos:0.5,size:BABY_SIZE},{id:'dad',pos:0.75,size:DAD_SIZE}],
+    bubble:{who:'grandpa', text:'姥爷：董狗~董狗！'} },
+  { bg:'home', title:'0 · 出生',
+    actors:[{id:'mom',pos:0.25},{id:'minfant',pos:0.5,size:BABY_SIZE},{id:'dad',pos:0.75,size:DAD_SIZE}],
+    narr:'婴儿、爸爸、妈妈：……' },
+
+  /* ===== 章节 1 ===== */
+  { type:'chapter', num:'1', name:'妈妈' },
+  { bg:'living', title:'1 · 妈妈',
+    narr:'随着时间流逝，罗女士花了越来越多时间操持内务，照顾老小，逐渐就成了生活的几乎全部。' },
+  { bg:'living', title:'1 · 妈妈',
+    actors:[
+      {id:'minfant',pos:0.5,size:380,noBob:true},
+      {id:'mom',pos:0.5,orbit:true}
+    ],
+    fx:['orbit','sweep'] },
+  { bg:'stageSpotlight', title:'1 · 妈妈',
+    actors:[{id:'me',pos:0.5}],
+    narr:'终于拉扯大了。' },
+  { bg:'bedroom', title:'1 · 妈妈',
+    actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
+    narr:'但在拉扯大之前，少不了一些拉扯。' },
+  { bg:'bedroom', title:'1 · 妈妈',
+    actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
+    narr:'但在拉扯大之前，少不了一些拉扯。',
+    bubble:{who:'meboy', text:'妈——我的红领巾去哪儿了呀？帮我找一下嘛'} },
+  { bg:'bedroom', title:'1 · 妈妈',
+    actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
+    bubble:{who:'mom', text:'那里不是？'} },
+  { bg:'bedroom', title:'1 · 妈妈',
+    actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
+    bubble:{who:'meboy', text:'不是，没有，不可能。'} },
+  { bg:'bedroom', title:'1 · 妈妈',
+    actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
+    bubble:{who:'mom', text:'你再看看！'} },
+  { bg:'bedroom', title:'1 · 妈妈',
+    actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
+    bubble:{who:'meboy', text:'哦是'} ,
+    fx:['scarf'] },
+  { bg:'bedroom', title:'1 · 妈妈',
+    actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
+    narr:'精益求精、仔细一点的旋律总是伴随着母亲做一切事，尤其是对家人无微不至。' },
+  { bg:'workcorner', title:'1 · 妈妈',
+    actors:[{id:'mom',pos:0.5,walk:true}],
+    narr:'每每回想起母亲对着密密麻麻的笔记修电脑的样子，让我叹为观止的同时，说不清是人类征服了机械的精致还是机械征服了人类的躁动，好像就是一念之间。' },
+  { bg:'livingApple', title:'1 · 妈妈',
+    actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
+    narr:'还有些拉扯则烦恼一些。',
+    fx:['fruit'] },
+  { bg:'livingApple', title:'1 · 妈妈',
+    actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
+    bubble:{who:'mom', text:'再吃一块嘛，只有一个了'},
+    fx:['fruit'] },
+  { bg:'livingApple', title:'1 · 妈妈',
+    actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
+    bubble:{who:'meboy', text:'不要'},
+    fx:['fruit'] },
+  { bg:'livingApple', title:'1 · 妈妈',
+    actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
+    bubble:{who:'mom', text:'一小口嘛'},
+    fx:['fruit'] },
+  { bg:'livingApple', title:'1 · 妈妈',
+    actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
+    bubble:{who:'meboy', text:'不要不要'},
+    fx:['fruit'] },
+  { bg:'livingApple', title:'1 · 妈妈',
+    actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
+    bubble:{who:'mom', text:'换一种再吃点嘛'},
+    fx:['fruit'] },
+  { bg:'livingApple', title:'1 · 妈妈',
+    actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
+    bubble:{who:'meboy', text:'……'},
+    fx:['fruit','appleboom'] },
+  { bg:'livingApple', title:'1 · 妈妈',
+    actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
+    narr:'小事逼一下会变大，但爱从不爆炸。' },
+  { bg:'living', title:'1 · 妈妈',
+    narr:'所以居家无非，循礼保护着我们的温暖，礼不扰人。',
+    fx:['heart'] },
+
+  /* ===== 章节 2 ===== */
+  { type:'chapter', num:'2', name:'爸爸' },
+  { bg:'study', title:'2 · 爸爸',
+    actors:[{id:'dad',pos:0.58,size:DAD_SIZE},{id:'meboy',pos:0.42}],
+    narr:'小时候爸爸总是各种炫技。' },
+  { bg:'study', title:'2 · 爸爸',
+    actors:[{id:'dad',pos:0.58,size:DAD_SIZE},{id:'meboy',pos:0.42}],
+    bubble:{who:'dad', text:'我给你画个素描看看'} },
+  { bg:'study', title:'2 · 爸爸',
+    actors:[{id:'dad',pos:0.58,size:DAD_SIZE},{id:'meboy',pos:0.42}],
+    bubble:{who:'meboy', text:'哇！好厉害'} },
+  { bg:'study', title:'2 · 爸爸',
+    actors:[{id:'dad',pos:0.58,size:DAD_SIZE},{id:'meboy',pos:0.42}],
+    bubble:{who:'dad', text:'你知道量子力学吗？'} },
+  { bg:'study', title:'2 · 爸爸',
+    actors:[{id:'dad',pos:0.58,size:DAD_SIZE},{id:'meboy',pos:0.42}],
+    bubble:{who:'meboy', text:'哇！想听'} },
+  { bg:'study', title:'2 · 爸爸',
+    actors:[{id:'dad',pos:0.58,size:DAD_SIZE},{id:'meboy',pos:0.42}],
+    bubble:{who:'dad', text:'古代人都有自己的终极人生追求，人会追求闻道。'} },
+  { bg:'study', title:'2 · 爸爸',
+    actors:[{id:'dad',pos:0.58,size:DAD_SIZE},{id:'meboy',pos:0.42}],
+    bubble:{who:'meboy', text:'什么意思？'} },
+  { bg:'study', title:'2 · 爸爸',
+    actors:[{id:'dad',pos:0.58,size:DAD_SIZE},{id:'meboy',pos:0.42}],
+    narr:'小孩听不懂。多年以后才明白，小时候对雪山圣域、星辰大海的神往，人对无垠天地的仰慕，正是道德精神的本源。' },
+  { bg:'livingPPT', title:'2 · 爸爸',
+    actors:[{id:'dad',pos:0.58,size:DAD_SIZE},{id:'me',pos:0.42}],
+    narr:'当然，长大了以后董先生也还是爱展示，比如……' },
+  { bg:'livingPPT', title:'2 · 爸爸',
+    actors:[{id:'dad',pos:0.58,size:DAD_SIZE},{id:'me',pos:0.42}],
+    bubble:{who:'dad', text:'我做了一个ppt，我们这几天好好讨论一下你的人生大事。'} },
+  { bg:'livingPPT', title:'2 · 爸爸',
+    actors:[{id:'dad',pos:0.58,size:DAD_SIZE},{id:'me',pos:0.42}],
+    bubble:{who:'me', text:'……'} },
+  { bg:'livingPPT', title:'2 · 爸爸',
+    actors:[{id:'dad',pos:0.58,size:DAD_SIZE},{id:'me',pos:0.42}],
+    narr:'于是，忐忑紧张中，我们开着ppt讨论了3天，沉浸式享受了天下独一份的出柜剧情。' },
+
+  /* ===== 章节 3 ===== */
+  { type:'chapter', num:'3', name:'Lang' },
+  { bg:'cafe', title:'3 · Lang · 第一次遇到',
+    actors:[{id:'me',pos:0.38},{id:'lang',pos:0.62}],
+    narr:'《第一次遇到lang》' },
+  { bg:'snowNight', title:'3 · Lang · 第一次遇到',
+    actors:[{id:'me',pos:0.4},{id:'lang',pos:0.6}],
+    bubble:{who:'lang', text:'今天雪大，我带了伞，送你过去。'},
+    fx:['snow'] },
+  { bg:'snowNight', title:'3 · Lang · 第一次遇到',
+    actors:[{id:'me',pos:0.4},{id:'lang',pos:0.6}],
+    narr:'这位一身脂包腱子肉，带着一丝自信神情的家伙，每次总是背着一个沉甸甸的大包，装着一切求生物资和办公用品，应有尽有。',
+    fx:['snow','bag'] },
+  { bg:'snowNight', title:'3 · Lang · 第一次遇到',
+    actors:[{id:'me',pos:0.4},{id:'lang',pos:0.6}],
+    fx:['snow','bag','fireworks','umbrella'] },
+  { bg:'cafe', title:'3 · Lang · 商务洽谈',
+    actors:[{id:'me',pos:0.35},{id:'lang',pos:0.65}],
+    narr:'更多的时候，约会则更像商务洽谈。' },
+  { bg:'cafe', title:'3 · Lang · 商务洽谈',
+    actors:[{id:'me',pos:0.35},{id:'lang',pos:0.65}],
+    bubble:{who:'lang', text:'我看了你主页的资料，印象特别好。'} },
+  { bg:'cafe', title:'3 · Lang · 商务洽谈',
+    actors:[{id:'me',pos:0.35},{id:'lang',pos:0.65}],
+    bubble:{who:'me', text:'……（这是哪家公司的HR啊？）'} },
+  { bg:'cafe', title:'3 · Lang · 商务洽谈',
+    actors:[{id:'me',pos:0.35},{id:'lang',pos:0.65}],
+    bubble:{who:'me', text:'emm这个……那个……我准备了一份清单，你看看是不是能接受。'},
+    fx:['notebook'] },
+  { bg:'cafe', title:'3 · Lang · 商务洽谈',
+    actors:[{id:'me',pos:0.35},{id:'lang',pos:0.65}],
+    bubble:{who:'lang', text:'好巧，我也准备了。'},
+    fx:['notebook','laptop'] },
+  { bg:'cafe', title:'3 · Lang · 商务洽谈',
+    actors:[{id:'me',pos:0.35},{id:'lang',pos:0.65}],
+    narr:'奇怪而认真的默契，让我紧张而惊喜。' },
+  { bg:'iceRiver', title:'3 · Lang · 冰上烟花',
+    actors:[{id:'me',pos:0.44,skate:true},{id:'lang',pos:0.56,skate:true}],
+    narr:'当然也有浪漫时刻。比如，新年夜的冰河，烟花朵朵绽放...',
+    fx:['fireworks','snow'] },
+  { bg:'spring', title:'3 · Lang · 立春为契',
+    actors:[{id:'me',pos:0.42},{id:'lang',pos:0.58}],
+    narr:'于是，众所周知，我们签字画押，立春为契，要把四季的美好留在日常的点滴中。',
+    fx:['petals','cert'] },
+
+  /* ===== 章节 4 ===== */
+  { type:'chapter', num:'4', name:'阿姨' },
+  { bg:'greatWall', title:'4 · 邱女士 · 初见',
+    actors:[
+      {id:'me',pos:0.36,slant:true,size:400},
+      {id:'lang',pos:0.5,slant:true,size:400},
+      {id:'melody',pos:0.64,slant:true,size:400}
+    ],
+    narr:'后来第一次见阿姨，有些忐忑。' },
+  { bg:'greatWall', title:'4 · 邱女士 · 初见',
+    actors:[
+      {id:'me',pos:0.36,slant:true,size:400},
+      {id:'lang',pos:0.5,slant:true,size:400},
+      {id:'melody',pos:0.64,slant:true,size:400}
+    ],
+    bubble:{who:'melody', text:'3~2~1——茄子。'} },
+  { bg:'greatWall', title:'4 · 邱女士 · 初见',
+    actors:[
+      {id:'me',pos:0.36,slant:true,size:400},
+      {id:'lang',pos:0.5,slant:true,size:400},
+      {id:'melody',pos:0.64,slant:true,size:400}
+    ],
+    bubble:{who:'me', text:'怎么样呀？看看图呢。'} },
+  { bg:'greatWall', title:'4 · 邱女士 · 初见',
+    actors:[
+      {id:'me',pos:0.36,slant:true,size:400},
+      {id:'lang',pos:0.5,slant:true,size:400},
+      {id:'melody',pos:0.64,slant:true,size:400}
+    ],
+    bubble:{who:'melody', text:'emmm，你们两个亲热一点嘛。'} },
+  { bg:'greatWall', title:'4 · 邱女士 · 初见',
+    actors:[
+      {id:'me',pos:0.36,slant:true,size:400},
+      {id:'lang',pos:0.5,slant:true,size:400},
+      {id:'melody',pos:0.64,slant:true,size:400}
+    ],
+    narr:'没毛病，不愧是一家人。' },
+  { bg:'live', title:'4 · 邱女士 · 直播间',
+    actors:[{id:'melody',pos:0.5}],
+    narr:'后来发现她还是"文体委员"，拍视频。' },
+  { bg:'choir', title:'4 · 邱女士 · 合唱团',
+    actors:[{id:'melody',pos:0.5}],
+    narr:'唱歌。' },
+  { bg:'dance', title:'4 · 邱女士 · 舞蹈教室',
+    actors:[{id:'melody',pos:0.5}],
+    narr:'跳舞。' },
+  { bg:'pool', title:'4 · 邱女士 · 游泳池',
+    actors:[{id:'melody',pos:0.5}],
+    narr:'游泳。' },
+  { bg:'stage', title:'4 · 邱女士 · 乡村舞台',
+    actors:[{id:'melody',pos:0.5}],
+    narr:'主持。' },
+  { bg:'awardBg', title:'4 · 邱女士 · 奖状',
+    actors:[{id:'melody',pos:0.5}],
+    narr:'好想发个奖状给她。',
+    fx:['award'] },
+
+  /* ===== 章节 5 ===== */
+  { type:'chapter', num:'', name:'小董的一小家子就是以上啦。' },
+  { type:'chapter', num:'', name:'下面开始考试，请验证自己的身份并完成各自的题目！' },
+  { type:'quiz' }
+];
+
+/* ================= 答题数据 ================= */
+var QUIZ = {
+  mom: {
+    who:'罗女士',
+    q:'以下几个哪个是家崽最喜欢的？',
+    opts:[
+      { t:'a) 收到妈妈的礼物', fb:'额哦，礼物也喜欢但比较挑剔啦，再试一试！', ok:false },
+      { t:'b) 妈妈和爸爸和睦恩爱', fb:'emm 当然也很好，但不是最喜欢的哦！', ok:false },
+      { t:'c) 妈妈发自内心的笑容',
+        fb:'bingo！答对了！什么也大不过真实的温暖，感谢妈妈的半生付出，希望您在红尘琐碎中永远伴随一份超越此生的快乐！',
+        ok:true }
+    ]
+  },
+  dad: {
+    who:'董先生',
+    q:'哪个是家崽回忆中您最帅的时刻？',
+    opts:[
+      { t:'a) SFTM全套制服接见家属参观',
+        fb:'严谨工作的样子确实很帅，制服也很 fashion，但选错了哦！', ok:false },
+      { t:'b) 接文灿叔叔来家里避震',
+        fb:'bingo！让人肃然起敬的事情总是留下不可磨灭的记忆，当时心里也很震撼，感谢爸爸的以身垂范，道不远人。',
+        ok:true },
+      { t:'c) 同意太阳和月亮可以同时出现在我的画里',
+        fb:'第一次懵懂感受到原来人的想法会变、心想难道这就是大人说的反思吗？怎么说变就变了，不过选错了哦！',
+        ok:false }
+    ]
+  },
+  lang: {
+    who:'陈先生',
+    q:'猜猜弟弟最喜欢你哪里？',
+    opts:[
+      { t:'a) 真诚',
+        fb:'bingo！因为人性或彰显或潜隐的尊贵一面，总要真诚而审慎的靠近每一个灵魂，谢谢你以包容和尊重陪伴我继续成长又一年！',
+        ok:true },
+      { t:'b) 自信勇敢',
+        fb:'自信勇敢很棒，但受挫的时候也不要忘了，大可自信调整往上超越哦！', ok:false },
+      { t:'c) 周密细致',
+        fb:'周密细致、体贴过于常人，不过总有没有准备好的时候，告诉我一起面对、不气馁哈！', ok:false }
+    ]
+  },
+  qiu: {
+    who:'邱女士',
+    q:'小董心中您最厉害的点',
+    opts:[
+      { t:'a) 随时社交 maxing',
+        fb:'合唱团、跳舞团、旅行团都抢着要的 star…随时随地 social 交朋友真的很棒！不过选错了，请再选一次吧！',
+        ok:false },
+      { t:'b) 不竭的热情活力',
+        fb:'bingo 答对啦！源源不断的生命活力，就是永远年轻的样子。',
+        ok:true },
+      { t:'c) 做饭五颜六色',
+        fb:'不擅长却经常挑战、且搭配健康，不认输本身就很厉害！不过选错了，再来一次吧！',
+        ok:false }
+    ]
+  }
+};
+
+/* ================= 渲染 ================= */
+var sceneEl = document.getElementById('scene');
+var actorsEl = document.getElementById('actors');
+var bubble = document.getElementById('bubble');
+var narr = document.getElementById('narr');
+var title = document.getElementById('title');
+var stage = document.getElementById('stage');
+var chapterScreen = document.getElementById('chapterScreen');
+var chNum = document.getElementById('chNum');
+var chName = document.getElementById('chName');
+var quizScreen = document.getElementById('quizScreen');
+var quizBody = document.getElementById('quizBody');
+var replyScreen = document.getElementById('replyScreen');
+var btnPrev = document.getElementById('btnPrev');
+var btnNext = document.getElementById('btnNext');
+var familyLayer = document.getElementById('familyLayer');
+var famGroup = document.getElementById('famGroup');
+var famPeople = document.getElementById('famPeople');
+var famPhotoBg = document.getElementById('famPhotoBg');
+var familyFlash = document.getElementById('familyFlash');
+var whiteOut = document.getElementById('whiteOut');
+var finalText = document.getElementById('finalText');
+
+var idx = -1;
+var timer = null;
+var fwInterval = null;
+var animTimers = [];
+var orbitRAF = null;
+var autoAdvanceTimer = null;
+
+function stopAllAnims(){
+  animTimers.forEach(function(t){ clearInterval(t); });
+  animTimers = [];
+  if(orbitRAF){ cancelAnimationFrame(orbitRAF); orbitRAF = null; }
+  if(autoAdvanceTimer){ clearTimeout(autoAdvanceTimer); autoAdvanceTimer = null; }
+}
+
+function startAnim(imgEl, frames, fallback){
+  imgEl.src = frames[0];
+  imgEl.onerror = function(){
+    this.onerror = null;
+    this.src = fallbackSVG(fallback);
+  };
+  var i = 0;
+  var t = setInterval(function(){
+    i = (i + 1) % frames.length;
+    imgEl.src = frames[i];
+    imgEl.onerror = function(){
+      this.onerror = null;
+      this.src = fallbackSVG(fallback);
+    };
+  }, FRAME_MS);
+  animTimers.push(t);
+}
+
+/* 全清（含水果） */
+function clearFx(){
+  var old = stage.querySelectorAll('.snow,.fw,.petal,.bag,.umbrella,.award-fx,.cert-fx,.prop,.boom,.apple,.orbit-sweep,.scarf,.heart,.starlight,.fruit');
+  for(var i=0;i<old.length;i++) old[i].parentNode.removeChild(old[i]);
+  if(fwInterval){ clearInterval(fwInterval); fwInterval = null; }
+}
+
+/* 只清瞬时（保留 fruit） */
+function clearTransientFx(){
+  var old = stage.querySelectorAll('.snow,.fw,.petal,.bag,.umbrella,.award-fx,.cert-fx,.prop,.boom,.apple,.orbit-sweep,.scarf,.heart,.starlight');
+  for(var i=0;i<old.length;i++) old[i].parentNode.removeChild(old[i]);
+  if(fwInterval){ clearInterval(fwInterval); fwInterval = null; }
+}
+
+/* ---------- 轨道动画 ---------- */
+function startOrbit(orbitEl, centerEl){
+  if(orbitRAF){ cancelAnimationFrame(orbitRAF); orbitRAF = null; }
+  var st = stage.getBoundingClientRect();
+  var cr = centerEl.getBoundingClientRect();
+  /* 用婴儿上半身作为圆心 */
+  var cx = cr.left - st.left + cr.width / 2;
+  var cy = cr.top - st.top + cr.height * 0.35;
+
+  orbitEl.style.left = '0px';
+  orbitEl.style.top = '0px';
+  orbitEl.style.bottom = 'auto';
+  orbitEl.style.transition = 'none';
+  orbitEl.style.transform = 'translate(-50%,-50%)';
+
+  var rx = 240, ry = 110;
+  var duration = 4500;
+  var totalLaps = 11;
+  var startTime = Date.now();
+  var imgEl = orbitEl.querySelector('img');
+  var grown = false, shrunk = false, finished = false;
+
+  function step(){
+    if(finished) return;
+    var elapsed = Date.now() - startTime;
+    var progress = Math.min(1, elapsed / duration);
+    var easeProgress = Math.pow(progress, 1.6);
+    var laps = easeProgress * totalLaps;
+    var angle = laps * Math.PI * 2;
+
+    if(laps >= 5 && !grown){
+      grown = true;
+      centerEl.style.transition = 'transform 1.2s ease-in-out';
+      centerEl.style.transformOrigin = 'bottom center';
+      centerEl.style.transform = 'translateX(-50%) scale(1.8)';
+    }
+    if(laps >= 10 && !shrunk){
+      shrunk = true;
+      centerEl.style.transition = 'transform 1.2s ease-in-out';
+      centerEl.style.transform = 'translateX(-50%) scale(1)';
+    }
+
+    var x = cx + Math.cos(angle) * rx;
+    var y = cy + Math.sin(angle) * ry;
+    orbitEl.style.left = x + 'px';
+    orbitEl.style.top = y + 'px';
+
+    if(progress > 0.5 && imgEl){
+      imgEl.style.opacity = '0.4';
+      imgEl.style.filter = 'blur(3px)';
+    }
+
+    if(progress >= 1){
+      finished = true;
+      if(orbitRAF){ cancelAnimationFrame(orbitRAF); orbitRAF = null; }
+      autoAdvanceTimer = setTimeout(function(){
+        if(idx >= 0 && STEPS[idx] && STEPS[idx].fx && STEPS[idx].fx.indexOf('orbit') >= 0){
+          next();
+        }
+      }, 500);
+      return;
+    }
+    orbitRAF = requestAnimationFrame(step);
+  }
+  orbitRAF = requestAnimationFrame(step);
+}
+
+/* ---------- 章节标题页 ---------- */
+function showChapter(step){
+  sceneEl.innerHTML = '';
+  actorsEl.innerHTML = '';
+  bubble.className = '';
+  narr.className = '';
+  title.textContent = '';
+  clearFx();
+  stopAllAnims();
+  quizScreen.classList.remove('show');
+  replyScreen.classList.add('hidden');
+  familyLayer.classList.remove('show');
+
+  chNum.textContent = step.num;
+  chName.textContent = step.name;
+  chapterScreen.classList.add('show');
+}
+
+/* ---------- 答题页 ---------- */
+function showQuiz(){
+  sceneEl.innerHTML = '';
+  actorsEl.innerHTML = '';
+  bubble.className = '';
+  narr.className = '';
+  title.textContent = '';
+  clearFx();
+  stopAllAnims();
+  chapterScreen.classList.remove('show');
+  replyScreen.classList.add('hidden');
+  familyLayer.classList.remove('show');
+
+  quizBody.innerHTML =
+    '<div class="q">题目一：您的身份是？</div>' +
+    '<div class="opts">' +
+    '<button class="opt" data-id="mom">a) 罗女士</button>' +
+    '<button class="opt" data-id="dad">b) 董先生</button>' +
+    '<button class="opt" data-id="lang">c) 陈先生</button>' +
+    '<button class="opt" data-id="qiu">d) 邱女士</button>' +
+    '</div>';
+  quizScreen.classList.add('show');
+
+  var btns = quizBody.querySelectorAll('.opt');
+  for(var i=0;i<btns.length;i++){
+    (function(b){
+      b.onclick = function(ev){
+        ev.stopPropagation();
+        var key = b.getAttribute('data-id');
+        showQuizQ(key);
+      };
+    })(btns[i]);
+  }
+}
+
+function showQuizQ(key){
+  var d = QUIZ[key];
+  if(!d) return;
+  quizBody.innerHTML =
+    '<div class="q">' + d.q + '</div>' +
+    '<div class="opts"></div>';
+  var opts2 = quizBody.querySelector('.opts');
+  d.opts.forEach(function(o, i){
+    var b = document.createElement('button');
+    b.className = 'opt';
+    b.textContent = o.t;
+    b.onclick = function(ev){
+      ev.stopPropagation();
+      chooseOpt(key, i);
+    };
+    opts2.appendChild(b);
+  });
+}
+
+function chooseOpt(key, i){
+  var d = QUIZ[key];
+  var o = d.opts[i];
+  replyScreen.className = (o.ok ? 'good' : 'soft');
+  replyScreen.classList.remove('hidden');
+
+  var html = '<div class="tag">' + (o.ok ? 'B I N G O' : '再 想 想') + '</div>';
+  html += '<div class="msg">' + o.fb + '</div>';
+  html += '<div class="btns">';
+  if(o.ok){
+    html += '<button id="rbRetry">再试试其他选项</button>';
+    html += '<button id="rbNext">下一步 →</button>';
+  } else {
+    html += '<button id="rbRetry">再试一次 →</button>';
+  }
+  html += '</div>';
+  replyScreen.innerHTML = html;
+
+  if(o.ok){
+    document.getElementById('rbRetry').onclick = function(ev){
+      ev.stopPropagation();
+      replyScreen.classList.add('hidden');
+    };
+    document.getElementById('rbNext').onclick = function(ev){
+      ev.stopPropagation();
+      replyScreen.classList.add('hidden');
+      quizScreen.classList.remove('show');
+      showFamilyPhoto();
+    };
+  } else {
+    document.getElementById('rbRetry').onclick = function(ev){
+      ev.stopPropagation();
+      replyScreen.classList.add('hidden');
+    };
+  }
+}
+
+/* ---------- 全家福 ---------- */
+function showFamilyPhoto(){
+  familyLayer.classList.add('show');
+
+  famPeople.innerHTML = '';
+  famPhotoBg.classList.remove('grow');
+  famGroup.style.transform = 'translate(-50%,-50%) scale(1)';
+
+  /* 人物大小 480 */
+  var PS = 480;
+
+  /* 坐标基于 group 中心（0,0） */
+  var people = [
+    /* 后排先加（z-index 1）：父 母 阿姨 */
+    {id:'dad',    x: -160, y:  70, size: PS, z: 1, delay: 0},
+    {id:'mom',    x:    0, y:  70, size: PS, z: 1, delay: 1},
+    {id:'melody', x:  180, y:  80, size: PS, z: 1, delay: 2},
+    /* 前排后加（z-index 2）：我 lang */
+    {id:'me',     x: -110, y: 220, size: PS, z: 2, delay: 3},
+    {id:'lang',   x:  110, y: 220, size: PS, z: 2, delay: 4}
+  ];
+
+  people.forEach(function(p){
+    var el = document.createElement('div');
+    el.className = 'photoActor';
+    el.style.left = p.x + 'px';
+    el.style.top = p.y + 'px';
+    el.style.zIndex = p.z;
+    el.style.opacity = '0';
+    var def = SPRITES[p.id];
+    if(!def) return;
+    var img = document.createElement('img');
+    img.style.width = p.size + 'px';
+    img.style.height = p.size + 'px';
+    el.appendChild(img);
+    famPeople.appendChild(el);
+    startAnim(img, def.frames, def.fallback);
+
+    setTimeout(function(){
+      el.style.opacity = '1';
+    }, 200 + p.delay * 150);
+  });
+
+  /* 相纸从背后逐渐变大 */
+  setTimeout(function(){
+    famPhotoBg.classList.add('grow');
+  }, 1200);
+
+  /* 定格后整体缩小 */
+  setTimeout(function(){
+    famGroup.style.transform = 'translate(-50%,-50%) scale(0.85)';
+  }, 3000);
+
+  /* 点击变白 */
+  familyLayer.onclick = function(){
+    familyLayer.onclick = null;
+    whiteOut.classList.add('show');
+    setTimeout(function(){ finalText.classList.add('show'); }, 1800);
+  };
+}
+
+/* ---------- 普通场景 ---------- */
+function showStep(s){
+  chapterScreen.classList.remove('show');
+  quizScreen.classList.remove('show');
+  replyScreen.classList.add('hidden');
+  familyLayer.classList.remove('show');
+
+  sceneEl.innerHTML = BG[s.bg] || '';
+  title.textContent = s.title;
+  actorsEl.innerHTML = '';
+  bubble.className = '';
+  stopAllAnims();
+
+  /* 清特效：若新场景还要水果，不清水果；否则全清 */
+  if(s.fx && s.fx.indexOf('fruit') >= 0){
+    clearTransientFx();
+  } else {
+    clearFx();
+  }
+
+  var orbitEl = null;
+  var centerEl = null;
+  var allEls = [];
+
+  (s.actors || []).forEach(function(a){
+    var def = SPRITES[a.id];
+    if(!def) return;
+    var el = document.createElement('div');
+    var cls = 'actor';
+    if(a.slant) cls += ' slant';
+    if(a.orbit) cls += ' orbit';
+    if(a.noBob) cls += ' noBob';
+    if(a.walk) cls += ' walk';
+    if(a.skate) cls += ' skate';
+    if(a.drop) cls += ' drop';
+    el.className = cls;
+    el.style.left = (a.pos * 100) + '%';
+    /* bottom 计算：默认 -10%，父亲更靠下 -20% */
+    var bottomOffset = -10;
+    if(a.id === 'dad') bottomOffset = -20;
+    if(a.slant) bottomOffset = (-2 + a.pos * 25);
+    el.style.bottom = bottomOffset + '%';
+    var img = document.createElement('img');
+    var sz = a.size || SIZE;
+    img.style.width = sz + 'px';
+    img.style.height = sz + 'px';
+    el.appendChild(img);
+    actorsEl.appendChild(el);
+    startAnim(img, def.frames, def.fallback);
+    allEls.push(el);
+    if(a.orbit) orbitEl = el;
+  });
+
+  if(orbitEl){
+    for(var k=0;k<allEls.length;k++){
+      if(allEls[k] !== orbitEl){ centerEl = allEls[k]; break; }
+    }
+    if(centerEl){
+      setTimeout(function(){ startOrbit(orbitEl, centerEl); }, 600);
+    }
+  }
+
+  narr.innerHTML = s.narr ? '<span>'+s.narr+'</span>' : '';
+  narr.className = s.narr ? 'show' : '';
+
+  if(s.fx && s.fx.indexOf('snow') >= 0) spawnSnow();
+  if(s.fx && s.fx.indexOf('fireworks') >= 0) spawnFireworks();
+  if(s.fx && s.fx.indexOf('petals') >= 0) spawnPetals();
+  if(s.fx && s.fx.indexOf('award') >= 0) spawnAward();
+  if(s.fx && s.fx.indexOf('cert') >= 0) spawnCert();
+  if(s.fx && s.fx.indexOf('bag') >= 0) spawnBag();
+  if(s.fx && s.fx.indexOf('umbrella') >= 0) spawnUmbrella();
+  if(s.fx && s.fx.indexOf('notebook') >= 0) spawnNotebook();
+  if(s.fx && s.fx.indexOf('laptop') >= 0) spawnLaptop();
+  if(s.fx && s.fx.indexOf('fruit') >= 0) spawnFruit();
+  if(s.fx && s.fx.indexOf('appleboom') >= 0) spawnAppleBoom();
+  if(s.fx && s.fx.indexOf('sweep') >= 0) spawnSweep();
+  if(s.fx && s.fx.indexOf('scarf') >= 0) spawnScarf();
+  if(s.fx && s.fx.indexOf('heart') >= 0) spawnHeart();
+
+  clearTimeout(timer);
+  if(s.bubble){
+    timer = setTimeout(function(){
+      var all = actorsEl.querySelectorAll('.actor');
+      var order = (s.actors || []).map(function(a){return a.id;});
+      var wi = order.indexOf(s.bubble.who);
+      var st = stage.getBoundingClientRect();
+
+      if(wi < 0 || !all[wi]){
+        bubble.textContent = s.bubble.text;
+        bubble.className = 'show';
+        bubble.style.left = '50%';
+        bubble.style.transform = 'translateX(-50%)';
+        bubble.style.top = '20px';
+        return;
+      }
+
+      var target = all[wi];
+      var r = target.getBoundingClientRect();
+      bubble.style.transform = '';
+      bubble.textContent = s.bubble.text;
+      bubble.className = 'show';
+
+      bubble.style.left = '0px';
+      bubble.style.top = Math.max(8, r.top - st.top - 75) + 'px';
+
+      requestAnimationFrame(function(){
+        var bw = bubble.offsetWidth;
+        var center = r.left - st.left + r.width / 2;
+        var left = center - bw / 2;
+        left = Math.max(8, Math.min(left, st.width - bw - 8));
+        bubble.style.left = left + 'px';
+      });
+    }, 900);
+  }
+}
+
+/* ---------- 特效 ---------- */
+function spawnSnow(){
+  for(var i=0;i<40;i++){
+    (function(i){
+      setTimeout(function(){
+        var s = document.createElement('div');
+        s.className = 'snow';
+        s.style.left = Math.random()*100 + '%';
+        s.style.animationDuration = (2.5 + Math.random()*2.5) + 's';
+        s.style.animationDelay = Math.random()*2 + 's';
+        stage.appendChild(s);
+      }, i * 80);
+    })(i);
+  }
+}
+
+function spawnFireworks(){
+  var colors = ['#ff6b6b','#ffd93d','#6bcbff','#b46bff','#6bff8a','#ff8ab4'];
+  fwInterval = setInterval(function(){
+    var cx = 40 + Math.random()*240;
+    var cy = 20 + Math.random()*80;
+    var color = colors[Math.floor(Math.random()*colors.length)];
+    for(var i=0;i<20;i++){
+      var ang = (i/20) * Math.PI * 2;
+      var dist = 45 + Math.random()*30;
+      var p = document.createElement('div');
+      p.className = 'fw';
+      p.style.left = cx + 'px';
+      p.style.top = cy + 'px';
+      p.style.background = color;
+      p.style.setProperty('--dx', Math.cos(ang)*dist + 'px');
+      p.style.setProperty('--dy', Math.sin(ang)*dist + 'px');
+      stage.appendChild(p);
+      setTimeout(function(el){ return function(){
+        if(el.parentNode) el.parentNode.removeChild(el);
+      }}(p), 1200);
+    }
+  }, 600);
+}
+
+function spawnPetals(){
+  for(var i=0;i<20;i++){
+    (function(i){
+      setTimeout(function(){
+        var s = document.createElement('div');
+        s.className = 'snow petal';
+        s.style.background = '#ff8ab4';
+        s.style.width = '6px';
+        s.style.height = '4px';
+        s.style.borderRadius = '50%';
+        s.style.left = Math.random()*100 + '%';
+        s.style.animationDuration = (3 + Math.random()*2) + 's';
+        s.style.animationDelay = Math.random()*2 + 's';
+        stage.appendChild(s);
+      }, i * 150);
+    })(i);
+  }
+}
+
+function spawnBag(){
+  setTimeout(function(){
+    var all = actorsEl.querySelectorAll('.actor');
+    var order = (STEPS[idx].actors || []).map(function(a){return a.id;});
+    var li = order.indexOf('lang');
+    if(li < 0 || !all[li]) return;
+    var r = all[li].getBoundingClientRect();
+    var st = stage.getBoundingClientRect();
+    var bag = document.createElement('div');
+    bag.className = 'bag';
+    bag.innerHTML = '<svg width="80" height="90" viewBox="0 0 80 90">'+
+      '<rect x="4" y="15" width="72" height="70" rx="6" fill="#1a1a1a" stroke="#000" stroke-width="3"/>'+
+      '<rect x="4" y="32" width="72" height="20" fill="#3a3a3a"/>'+
+      '<rect x="22" y="0" width="36" height="20" rx="8" fill="none" stroke="#1a1a1a" stroke-width="5"/>'+
+      '<rect x="34" y="42" width="12" height="4" fill="#666"/>'+
+      '<circle cx="40" cy="70" r="3" fill="#666"/>'+
+      '</svg>';
+    bag.style.left = (r.right - st.left + 5) + 'px';
+    bag.style.top = (r.top - st.top + r.height*0.25) + 'px';
+    stage.appendChild(bag);
+  }, 800);
+}
+
+function spawnUmbrella(){
+  setTimeout(function(){
+    var all = actorsEl.querySelectorAll('.actor');
+    if(!all.length) return;
+    var r1 = all[0].getBoundingClientRect();
+    var r2 = all[all.length-1].getBoundingClientRect();
+    var st = stage.getBoundingClientRect();
+    var cx = (r1.left + r2.right) / 2 - st.left;
+    var cy = Math.min(r1.top, r2.top) - st.top;
+    var um = document.createElement('div');
+    um.className = 'umbrella';
+    um.innerHTML = '<svg width="420" height="160" viewBox="0 0 420 160">'+
+      '<path d="M10 100 Q210 -10 410 100 Z" fill="#1a1a1a" stroke="#000" stroke-width="4"/>'+
+      '<line x1="210" y1="30" x2="10" y2="100" stroke="#000" stroke-width="3"/>'+
+      '<line x1="210" y1="30" x2="110" y2="100" stroke="#000" stroke-width="3"/>'+
+      '<line x1="210" y1="30" x2="210" y2="100" stroke="#000" stroke-width="3"/>'+
+      '<line x1="210" y1="30" x2="310" y2="100" stroke="#000" stroke-width="3"/>'+
+      '<line x1="210" y1="30" x2="410" y2="100" stroke="#000" stroke-width="3"/>'+
+      '<rect x="206" y="98" width="8" height="62" fill="#6a4a2a"/>'+
+      '<rect x="207" y="10" width="6" height="24" fill="#000"/>'+
+      '</svg>';
+    um.style.left = (cx - 210) + 'px';
+    um.style.top = Math.max(5, (cy - 80)) + 'px';
+    stage.appendChild(um);
+  }, 1600);
+}
+
+function spawnAward(){
+  setTimeout(function(){
+    var a = document.createElement('div');
+    a.className = 'award-fx';
+    a.style.left = '50%';
+    a.innerHTML = '<svg width="200" height="140" viewBox="0 0 200 140">'+
+      '<rect width="200" height="140" fill="#fff8e0" stroke="#c0392b" stroke-width="5"/>'+
+      '<text x="100" y="58" text-anchor="middle" font-size="34" fill="#c0392b" font-family="serif">奖 状</text>'+
+      '<text x="100" y="92" text-anchor="middle" font-size="14" fill="#333" font-family="serif">邱女士 · 文体委员</text>'+
+      '<text x="100" y="116" text-anchor="middle" font-size="11" fill="#666" font-family="serif">永远年轻 · 永远热情</text>'+
+      '</svg>';
+    stage.appendChild(a);
+    setTimeout(function(){ a.style.top = '5%'; }, 50);
+  }, 600);
+}
+
+function spawnCert(){
+  setTimeout(function(){
+    var c = document.createElement('div');
+    c.className = 'cert-fx';
+    c.style.top = '-200px';
+    c.innerHTML = '<svg width="180" height="125" viewBox="0 0 180 125">'+
+      '<rect width="180" height="125" fill="#fff8e0" stroke="#c0392b" stroke-width="4"/>'+
+      '<rect x="7" y="7" width="166" height="111" fill="none" stroke="#d4a843" stroke-width="1.5"/>'+
+      '<text x="90" y="45" text-anchor="middle" font-size="22" fill="#c0392b" font-family="serif">结婚证书</text>'+
+      '<text x="90" y="72" text-anchor="middle" font-size="11" fill="#333" font-family="serif">立春为契 · 签字画押</text>'+
+      '<circle cx="90" cy="98" r="14" fill="none" stroke="#c0392b" stroke-width="2"/>'+
+      '<text x="90" y="103" text-anchor="middle" font-size="10" fill="#c0392b">囍</text>'+
+      '</svg>';
+    stage.appendChild(c);
+    setTimeout(function(){ c.style.top = '5%'; }, 50);
+  }, 800);
+}
+
+function spawnNotebook(){
+  setTimeout(function(){
+    var nb = document.createElement('div');
+    nb.className = 'prop';
+    nb.style.cssText = 'position:absolute;left:50%;bottom:32%;'+
+      'transform:translateX(-50%);z-index:6;opacity:0;transition:opacity .4s';
+    nb.innerHTML = '<svg width="80" height="50" viewBox="0 0 80 50">'+
+      '<rect x="3" y="10" width="74" height="34" fill="#f5f0e0" stroke="#c0392b" stroke-width="3"/>'+
+      '<line x1="10" y1="20" x2="55" y2="20" stroke="#8ab4d8" stroke-width="2"/>'+
+      '<line x1="10" y1="27" x2="68" y2="27" stroke="#8ab4d8" stroke-width="2"/>'+
+      '<line x1="10" y1="34" x2="48" y2="34" stroke="#8ab4d8" stroke-width="2"/>'+
+      '<rect x="58" y="3" width="5" height="44" fill="#c0392b"/>'+
+      '</svg>';
+    stage.appendChild(nb);
+    setTimeout(function(){ nb.style.opacity = 1; }, 50);
+  }, 1000);
+}
+
+function spawnLaptop(){
+  setTimeout(function(){
+    var lp = document.createElement('div');
+    lp.className = 'prop';
+    lp.style.cssText = 'position:absolute;left:50%;bottom:32%;'+
+      'transform:translateX(-50%);z-index:6;opacity:0;transition:opacity .4s';
+    lp.innerHTML = '<svg width="110" height="70" viewBox="0 0 110 70">'+
+      '<rect x="12" y="3" width="86" height="50" fill="#2a2a2a" stroke="#000" stroke-width="3"/>'+
+      '<rect x="18" y="9" width="74" height="38" fill="#4a7fb5"/>'+
+      '<rect x="22" y="14" width="52" height="3" fill="#fff"/>'+
+      '<rect x="22" y="21" width="64" height="3" fill="#fff"/>'+
+      '<rect x="22" y="28" width="58" height="3" fill="#fff"/>'+
+      '<rect x="22" y="35" width="40" height="3" fill="#fff"/>'+
+      '<rect x="22" y="42" width="50" height="3" fill="#fff"/>'+
+      '<rect x="0" y="53" width="110" height="12" fill="#444" stroke="#000" stroke-width="3"/>'+
+      '<rect x="6" y="57" width="98" height="5" fill="#666"/>'+
+      '</svg>';
+    stage.appendChild(lp);
+    setTimeout(function(){ lp.style.opacity = 1; }, 50);
+  }, 1400);
+}
+
+function spawnFruit(){
+  setTimeout(function(){
+    if(stage.querySelector('.fruit')) return;
+    var all = actorsEl.querySelectorAll('.actor');
+    if(all.length < 2) return;
+    var r1 = all[0].getBoundingClientRect();
+    var r2 = all[1].getBoundingClientRect();
+    var st = stage.getBoundingClientRect();
+    var cx = (r1.right + r2.left) / 2 - st.left;
+    var cy = (r1.top + r1.bottom) / 2 - st.top;
+
+    var fruit = document.createElement('div');
+    fruit.className = 'fruit';
+    fruit.style.cssText = 'position:absolute;left:'+(cx-22)+'px;top:'+(cy-22)+
+      'px;z-index:6;transform-origin:center';
+    fruit.innerHTML = '<svg width="44" height="44" viewBox="0 0 44 44">'+
+      '<circle cx="22" cy="26" r="16" fill="#e74c3c"/>'+
+      '<circle cx="18" cy="22" r="5" fill="#ff6b6b" opacity="0.7"/>'+
+      '<rect x="20" y="4" width="4" height="8" fill="#6a4a2a"/>'+
+      '<circle cx="28" cy="12" r="7" fill="#4a9a3a"/>'+
+      '</svg>';
+    stage.appendChild(fruit);
+  }, 400);
+}
+
+function spawnAppleBoom(){
+  setTimeout(function(){
+    var fruit = stage.querySelector('.fruit');
+    if(!fruit) return;
+    var fx = parseFloat(fruit.style.left);
+    var fy = parseFloat(fruit.style.top);
+    var cx = fx + 22;
+    var cy = fy + 22;
+
+    fruit.style.transition = 'transform 1.6s ease-in';
+    fruit.style.transform = 'scale(10)';
+
+    setTimeout(function(){
+      if(fruit.parentNode) fruit.parentNode.removeChild(fruit);
+      for(var i=0;i<40;i++){
+        var ang = (i/40) * Math.PI * 2;
+        var dist = 160 + Math.random()*80;
+        var p = document.createElement('div');
+        p.className = 'fw boom';
+        p.style.left = cx + 'px';
+        p.style.top = cy + 'px';
+        p.style.background = i % 3 === 0 ? '#ff6b6b' : i % 3 === 1 ? '#ffd93d' : '#ff8a4a';
+        p.style.width = '12px';
+        p.style.height = '12px';
+        p.style.setProperty('--dx', Math.cos(ang)*dist + 'px');
+        p.style.setProperty('--dy', Math.sin(ang)*dist + 'px');
+        stage.appendChild(p);
+        setTimeout(function(el){ return function(){
+          if(el.parentNode) el.parentNode.removeChild(el);
+        }}(p), 1400);
+      }
+    }, 1600);
+  }, 400);
+}
+
+function spawnSweep(){
+  setTimeout(function(){
+    var all = actorsEl.querySelectorAll('.actor');
+    var order = (STEPS[idx].actors || []).map(function(a){return a.id;});
+    var mi = order.indexOf('mom');
+    if(mi < 0 || !all[mi]) return;
+    var b = document.createElement('div');
+    b.className = 'orbit-sweep';
+    b.style.cssText = 'position:absolute;left:-70px;top:25%;width:50px;z-index:4;'+
+      'transform-origin:top center;animation:sweepMove 1.2s ease-in-out infinite;'+
+      'pointer-events:none';
+    b.innerHTML = '<svg width="50" height="120" viewBox="0 0 50 120">'+
+      '<rect x="22" y="0" width="6" height="85" fill="#8a5a30"/>'+
+      '<rect x="8" y="85" width="34" height="32" fill="#d4a843"/>'+
+      '<line x1="12" y1="88" x2="12" y2="114" stroke="#8a5a30" stroke-width="2"/>'+
+      '<line x1="20" y1="88" x2="20" y2="114" stroke="#8a5a30" stroke-width="2"/>'+
+      '<line x1="28" y1="88" x2="28" y2="114" stroke="#8a5a30" stroke-width="2"/>'+
+      '<line x1="36" y1="88" x2="36" y2="114" stroke="#8a5a30" stroke-width="2"/>'+
+      '</svg>';
+    all[mi].appendChild(b);
+  }, 1000);
+}
+
+function spawnScarf(){
+  setTimeout(function(){
+    var all = actorsEl.querySelectorAll('.actor');
+    var order = (STEPS[idx].actors || []).map(function(a){return a.id;});
+    var mi = order.indexOf('mom');
+    if(mi < 0 || !all[mi]) return;
+    var r = all[mi].getBoundingClientRect();
+    var st = stage.getBoundingClientRect();
+    var scarf = document.createElement('div');
+    scarf.className = 'scarf';
+    scarf.style.cssText = 'position:absolute;left:'+(r.left - st.left + r.width*0.7)+
+      'px;top:'+(r.top - st.top - 40)+
+      'px;z-index:9;transform-origin:center;animation:scarfPop .6s ease-out forwards';
+    scarf.innerHTML = '<svg width="80" height="60" viewBox="0 0 80 60">'+
+      '<path d="M10 15 L40 8 L70 15 L70 25 L40 40 L10 25 Z" fill="#e53935" stroke="#8a1a1a" stroke-width="2"/>'+
+      '<circle cx="40" cy="20" r="4" fill="#ff8a8a" opacity="0.6"/>'+
+      '<circle cx="60" cy="55" r="30" fill="#ff5555" opacity="0.15"/>'+
+      '</svg>';
+    stage.appendChild(scarf);
+  }, 500);
+}
+
+function spawnHeart(){
+  setTimeout(function(){
+    var heart = document.createElement('div');
+    heart.className = 'heart';
+    heart.style.cssText = 'position:absolute;left:50%;top:45%;'+
+      'transform:translate(-50%,-50%);z-index:8;'+
+      'animation:heartGlow 2s ease-in-out infinite';
+    heart.innerHTML = '<svg width="200" height="180" viewBox="0 0 200 180">'+
+      '<path d="M100 170 C30 120, 10 70, 40 45 C65 25, 90 45, 100 65 C110 45, 135 25, 160 45 C190 70, 170 120, 100 170 Z" '+
+      'fill="#ff4d6d" stroke="#c0392b" stroke-width="3"/>'+
+      '<ellipse cx="70" cy="60" rx="10" ry="6" fill="#ff8aa0" opacity="0.7"/>'+
+      '</svg>';
+    stage.appendChild(heart);
+  }, 500);
+}
+
+/* ================= 翻页 ================= */
+function render(i){
+  if(i < 0) i = 0;
+  if(i >= STEPS.length) i = STEPS.length - 1;
+  idx = i;
+
+  var s = STEPS[idx];
+
+  if(s.type === 'chapter'){
+    showChapter(s);
+  } else if(s.type === 'quiz'){
+    showQuiz();
+  } else {
+    showStep(s);
+  }
+
+  btnPrev.disabled = (idx === 0);
+  btnNext.disabled = (idx === STEPS.length - 1);
+}
+
+function next(){
+  if(idx >= STEPS.length - 1) return;
+  render(idx + 1);
+}
+
+function prev(){
+  if(idx <= 0) return;
+  render(idx - 1);
+}
+
+btnNext.onclick = function(e){
+  e.stopPropagation();
+  next();
+};
+btnPrev.onclick = function(e){
+  e.stopPropagation();
+  prev();
+};
+
+stage.addEventListener('click', function(e){
+  if(e.target.closest && e.target.closest('#controls')) return;
+  if(e.target.closest && e.target.closest('#quizScreen')) return;
+  if(e.target.closest && e.target.closest('#replyScreen')) return;
+  if(!replyScreen.classList.contains('hidden')) return;
+  if(quizScreen.classList.contains('show')) return;
+  if(familyLayer.classList.contains('show')) return;
+  next();
+});
+
+document.addEventListener('keydown', function(e){
+  if(e.keyCode === 32 || e.keyCode === 39){ e.preventDefault(); next(); }
+  if(e.keyCode === 37){ e.preventDefault(); prev(); }
+});
+
+render(0);
+</script>
+</body>
+</html>
