@@ -294,6 +294,8 @@ var AC = null;
 var audioNodes = [];
 var bgmNodes = [];
 var bgmEnabled = false;
+var bgmStartTime = 0;   /* BGM 开始播放的时间戳，用于判断是否还在 12 秒内 */
+var BGM_DURATION = 12000;  /* BGM 时长，毫秒 */
 var lastSfx = null;
 
 function getAC(){
@@ -314,6 +316,7 @@ function stopBgmNodes(){
     try{ if(n.disconnect) n.disconnect(); }catch(e){}
   });
   bgmNodes = [];
+  bgmStartTime = 0;
 }
 function trackAudio(node){ audioNodes.push(node); return node; }
 function trackBgm(node){ bgmNodes.push(node); return node; }
@@ -622,6 +625,7 @@ function sfxBgm(){
 /* ---------- 🎵 BGM 单次播放 ---------- */
 function playBgmOnce(){
   stopBgmNodes();
+  bgmStartTime = Date.now();
   try{ sfxBgm(); }catch(e){ console.warn('bgm error', e); }
 }
 
@@ -644,7 +648,6 @@ function sfxWedding(){
   var G4=392, C5=523.25, D5=587.33, E5=659.25,
       G5=783.99, B5=987.77, C6=1046.5, D6=1174.66;
 
-  /* 主旋律 */
   var melody = [
     [G4, 0.15], [G4, 0.15], [G4, 0.15], [C5, 0.75],
     [G4, 0.15], [G4, 0.15], [G4, 0.15], [C5, 0.75],
@@ -658,7 +661,6 @@ function sfxWedding(){
     mt += n[1];
   });
 
-  /* 管风琴低音 */
   var bass = [
     [261.63, 0.6], [261.63, 0.6], [261.63, 0.6], [261.63, 0.6],
     [174.61, 0.6], [174.61, 0.6], [196.00, 0.6], [196.00, 0.6],
@@ -1950,21 +1952,32 @@ function showStep(s){
   if(s.fx && s.fx.indexOf('scarf') >= 0) spawnScarf();
   if(s.fx && s.fx.indexOf('heart') >= 0) spawnHeart();
 
-  /* BGM：只在每章第一幕（章节 1/2/3/4 的开场页）播一次 */
-  var prevStep = STEPS[idx - 1];
-  var isChapterOpening = prevStep &&
-    prevStep.type === 'chapter' &&
-    prevStep.num && prevStep.num !== '0';
-  if(bgmEnabled && isChapterOpening && !s.bgmPause){
-    playBgmOnce();
-  } else {
-    stopBgmNodes();
-  }
+  /* ====== BGM 逻辑 ======
+     1) 新场景有特效音 → 停止 BGM（特效优先）
+     2) 新场景没特效音：
+        - 如果 BGM 还在 12 秒内 → 不打断，让它继续播
+        - 如果 BGM 已停 → 判断是否章节开头，是就重新播一次
+     ==================================== */
+  var bgmStillPlaying = bgmStartTime && (Date.now() - bgmStartTime < BGM_DURATION - 500);
 
-  /* 场景专属音效 */
   if(s.sfx){
+    /* 有特效音：停 BGM，播特效 */
+    if(bgmStillPlaying) stopBgmNodes();
     setTimeout(function(){ playSfx(s.sfx); }, 200);
+    lastSfx = null;
   } else {
+    /* 没特效音 */
+    if(!bgmStillPlaying){
+      /* BGM 不在播：章节开头就播，其他页什么都不做 */
+      var prevStep = STEPS[idx - 1];
+      var isChapterOpening = prevStep &&
+        prevStep.type === 'chapter' &&
+        prevStep.num && prevStep.num !== '0';
+      if(bgmEnabled && isChapterOpening && !s.bgmPause){
+        playBgmOnce();
+      }
+    }
+    /* 如果 BGM 还在播，什么都不做，让它继续响 */
     lastSfx = null;
   }
 
@@ -2165,6 +2178,7 @@ function spawnNotebook(){
     setTimeout(function(){ nb.style.opacity = 1; }, 50);
   }, 1000);
 }
+
 function spawnLaptop(){
   setTimeout(function(){
     var lp = document.createElement('div');
