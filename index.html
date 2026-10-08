@@ -28,7 +28,6 @@
   }
   .actor.slant{animation:none;
     transform:translateX(-50%) rotate(-8deg) translateY(-10px)}
-  /* 轨道：中心定位 */
   .actor.orbit{animation:none;transition:none;z-index:6;
     transform:translate(-50%,-50%)}
   .actor.noBob{animation:none;transform-origin:bottom center}
@@ -288,7 +287,499 @@
 </div>
 
 <script>
-/* ============================================================ */
+/* ============================================================
+   Web Audio 音效合成引擎
+   ============================================================ */
+var AC = null;
+var audioNodes = [];
+var bgmNodes = [];
+var bgmEnabled = false;
+var lastSfx = null;
+
+function getAC(){
+  if(!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+  if(AC.state === 'suspended') AC.resume();
+  return AC;
+}
+function stopAllSounds(){
+  audioNodes.forEach(function(n){
+    try{ if(n.stop) n.stop(); }catch(e){}
+    try{ if(n.disconnect) n.disconnect(); }catch(e){}
+  });
+  audioNodes = [];
+}
+function stopBgmNodes(){
+  bgmNodes.forEach(function(n){
+    try{ if(n.stop) n.stop(); }catch(e){}
+    try{ if(n.disconnect) n.disconnect(); }catch(e){}
+  });
+  bgmNodes = [];
+}
+function trackAudio(node){ audioNodes.push(node); return node; }
+function trackBgm(node){ bgmNodes.push(node); return node; }
+function noiseBuf(ac, dur){
+  var buf = ac.createBuffer(1, Math.max(1, Math.floor(ac.sampleRate * dur)), ac.sampleRate);
+  var data = buf.getChannelData(0);
+  for(var i=0;i<data.length;i++) data[i] = Math.random()*2-1;
+  return buf;
+}
+
+/* ---------- 🌌 宇宙出生 ---------- */
+function sfxSpace(){
+  var ac = getAC(), t = ac.currentTime;
+  var chords = [
+    [220, 262, 330, 392],
+    [175, 220, 262, 330],
+    [131, 165, 196, 330],
+    [196, 247, 294, 392]
+  ];
+  chords.forEach(function(chord, ci){
+    var start = t + ci * 2;
+    chord.forEach(function(freq){
+      [-3, 3].forEach(function(detune){
+        var osc = trackAudio(ac.createOscillator());
+        var gain = trackAudio(ac.createGain());
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        osc.detune.value = detune;
+        gain.gain.setValueAtTime(0, start);
+        gain.gain.linearRampToValueAtTime(0.045, start + 0.6);
+        gain.gain.setValueAtTime(0.045, start + 1.5);
+        gain.gain.linearRampToValueAtTime(0, start + 2.1);
+        osc.connect(gain).connect(ac.destination);
+        osc.start(start); osc.stop(start + 2.2);
+      });
+    });
+  });
+  for(var i=0;i<20;i++){
+    var start = t + i * 0.4 + Math.random() * 0.2;
+    var freq = 1200 + Math.random() * 2400;
+    var osc = trackAudio(ac.createOscillator());
+    var gain = trackAudio(ac.createGain());
+    osc.type = 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.025, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(start); osc.stop(start + 0.4);
+  }
+}
+
+/* ---------- 👶 婴儿啼哭 ---------- */
+function sfxBaby(){
+  var ac = getAC(), t = ac.currentTime;
+  for(var i=0;i<3;i++){
+    var start = t + i * 0.65;
+    var osc = trackAudio(ac.createOscillator());
+    var gain = trackAudio(ac.createGain());
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(520, start);
+    osc.frequency.linearRampToValueAtTime(380, start + 0.5);
+    var lfo = trackAudio(ac.createOscillator());
+    var lfoGain = trackAudio(ac.createGain());
+    lfo.frequency.value = 12;
+    lfoGain.gain.value = 30;
+    lfo.connect(lfoGain).connect(osc.frequency);
+    lfo.start(start); lfo.stop(start + 0.6);
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.15, start + 0.05);
+    gain.gain.setValueAtTime(0.15, start + 0.4);
+    gain.gain.linearRampToValueAtTime(0, start + 0.6);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(start); osc.stop(start + 0.65);
+  }
+}
+
+/* ---------- 🌀 妈妈转圈风声 ---------- */
+function sfxWind(){
+  var ac = getAC(), t = ac.currentTime;
+  var noise = trackAudio(ac.createBufferSource());
+  noise.buffer = noiseBuf(ac, 6);
+  noise.loop = true;
+  var filter = trackAudio(ac.createBiquadFilter());
+  filter.type = 'bandpass';
+  filter.frequency.setValueAtTime(200, t);
+  filter.frequency.linearRampToValueAtTime(1500, t + 5);
+  filter.frequency.linearRampToValueAtTime(600, t + 6);
+  filter.Q.value = 2;
+  var gain = trackAudio(ac.createGain());
+  gain.gain.setValueAtTime(0, t);
+  gain.gain.linearRampToValueAtTime(0.15, t + 1);
+  gain.gain.linearRampToValueAtTime(0.3, t + 5);
+  gain.gain.linearRampToValueAtTime(0, t + 6);
+  noise.connect(filter).connect(gain).connect(ac.destination);
+  noise.start(t); noise.stop(t + 6);
+}
+
+/* ---------- 🏆 奖状喜庆音 ---------- */
+function sfxAward(){
+  var ac = getAC(), t = ac.currentTime;
+  var notes = [523, 659, 784, 1047];
+  notes.forEach(function(freq, i){
+    var start = t + i * 0.18;
+    var osc = trackAudio(ac.createOscillator());
+    var gain = trackAudio(ac.createGain());
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.12, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + 0.35);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(start); osc.stop(start + 0.4);
+  });
+  var start2 = t + 0.18 * 4;
+  [523, 659, 784].forEach(function(freq){
+    var osc = trackAudio(ac.createOscillator());
+    var gain = trackAudio(ac.createGain());
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, start2);
+    gain.gain.linearRampToValueAtTime(0.08, start2 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, start2 + 0.8);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(start2); osc.stop(start2 + 0.9);
+  });
+}
+
+/* ---------- 💥 苹果爆炸 ---------- */
+function sfxBoom(){
+  var ac = getAC(), t = ac.currentTime;
+  var sub = trackAudio(ac.createOscillator());
+  var subGain = trackAudio(ac.createGain());
+  sub.type = 'sine';
+  sub.frequency.setValueAtTime(200, t);
+  sub.frequency.exponentialRampToValueAtTime(20, t + 1.0);
+  subGain.gain.setValueAtTime(0.6, t);
+  subGain.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
+  sub.connect(subGain).connect(ac.destination);
+  sub.start(t); sub.stop(t + 1.0);
+
+  var mid = trackAudio(ac.createOscillator());
+  var midGain = trackAudio(ac.createGain());
+  mid.type = 'sawtooth';
+  mid.frequency.setValueAtTime(150, t);
+  mid.frequency.exponentialRampToValueAtTime(40, t + 0.6);
+  midGain.gain.setValueAtTime(0.35, t);
+  midGain.gain.exponentialRampToValueAtTime(0.001, t + 0.6);
+  mid.connect(midGain).connect(ac.destination);
+  mid.start(t); mid.stop(t + 0.6);
+
+  var noise = trackAudio(ac.createBufferSource());
+  noise.buffer = noiseBuf(ac, 1.2);
+  var lp = trackAudio(ac.createBiquadFilter());
+  lp.type = 'lowpass';
+  lp.frequency.setValueAtTime(10000, t);
+  lp.frequency.exponentialRampToValueAtTime(100, t + 1.0);
+  lp.Q.value = 1;
+  var nGain = trackAudio(ac.createGain());
+  nGain.gain.setValueAtTime(0.5, t);
+  nGain.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
+  noise.connect(lp).connect(nGain).connect(ac.destination);
+  noise.start(t); noise.stop(t + 1.0);
+
+  var sparkle = trackAudio(ac.createBufferSource());
+  sparkle.buffer = noiseBuf(ac, 0.4);
+  var hp = trackAudio(ac.createBiquadFilter());
+  hp.type = 'highpass';
+  hp.frequency.value = 4000;
+  var sGain = trackAudio(ac.createGain());
+  sGain.gain.setValueAtTime(0.25, t);
+  sGain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+  sparkle.connect(hp).connect(sGain).connect(ac.destination);
+  sparkle.start(t + 0.05); sparkle.stop(t + 0.45);
+}
+
+/* ---------- 📷 相机快门 ---------- */
+function sfxShutter(){
+  var ac = getAC(), t = ac.currentTime;
+  var n1 = trackAudio(ac.createBufferSource());
+  n1.buffer = noiseBuf(ac, 0.025);
+  var bp1 = trackAudio(ac.createBiquadFilter());
+  bp1.type = 'bandpass';
+  bp1.frequency.value = 5000;
+  bp1.Q.value = 12;
+  var g1 = trackAudio(ac.createGain());
+  g1.gain.setValueAtTime(0, t);
+  g1.gain.linearRampToValueAtTime(0.5, t + 0.001);
+  g1.gain.exponentialRampToValueAtTime(0.001, t + 0.025);
+  n1.connect(bp1).connect(g1).connect(ac.destination);
+  n1.start(t); n1.stop(t + 0.03);
+
+  var m1 = trackAudio(ac.createOscillator());
+  var mg1 = trackAudio(ac.createGain());
+  m1.type = 'square';
+  m1.frequency.value = 6500;
+  mg1.gain.setValueAtTime(0.08, t);
+  mg1.gain.exponentialRampToValueAtTime(0.001, t + 0.02);
+  m1.connect(mg1).connect(ac.destination);
+  m1.start(t); m1.stop(t + 0.025);
+
+  var t2 = t + 0.07;
+  var n2 = trackAudio(ac.createBufferSource());
+  n2.buffer = noiseBuf(ac, 0.05);
+  var bp2 = trackAudio(ac.createBiquadFilter());
+  bp2.type = 'bandpass';
+  bp2.frequency.value = 2500;
+  bp2.Q.value = 8;
+  var g2 = trackAudio(ac.createGain());
+  g2.gain.setValueAtTime(0, t2);
+  g2.gain.linearRampToValueAtTime(0.35, t2 + 0.002);
+  g2.gain.exponentialRampToValueAtTime(0.001, t2 + 0.05);
+  n2.connect(bp2).connect(g2).connect(ac.destination);
+  n2.start(t2); n2.stop(t2 + 0.06);
+
+  var m2 = trackAudio(ac.createOscillator());
+  var mg2 = trackAudio(ac.createGain());
+  m2.type = 'triangle';
+  m2.frequency.setValueAtTime(300, t2);
+  m2.frequency.exponentialRampToValueAtTime(80, t2 + 0.04);
+  mg2.gain.setValueAtTime(0.15, t2);
+  mg2.gain.exponentialRampToValueAtTime(0.001, t2 + 0.05);
+  m2.connect(mg2).connect(ac.destination);
+  m2.start(t2); m2.stop(t2 + 0.06);
+}
+
+/* ---------- 🍄 马里奥通关音乐 ---------- */
+function sfxMario(){
+  var ac = getAC(), t = ac.currentTime;
+  var scale = [
+    [523, 0.12], [587, 0.12], [659, 0.12], [698, 0.12],
+    [784, 0.12], [880, 0.12], [988, 0.12], [1047, 0.12],
+    [1319, 0.1], [1568, 0.1], [2093, 0.5]
+  ];
+  var time = t;
+  scale.forEach(function(n){
+    var osc = trackAudio(ac.createOscillator());
+    var gain = trackAudio(ac.createGain());
+    osc.type = 'square';
+    osc.frequency.value = n[0];
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(0.12, time + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + n[1] * 0.95);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(time); osc.stop(time + n[1]);
+    time += n[1];
+  });
+  var endTime = time + 0.1;
+  [1047, 1319, 1568].forEach(function(freq){
+    var osc = trackAudio(ac.createOscillator());
+    var gain = trackAudio(ac.createGain());
+    osc.type = 'square';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, endTime);
+    gain.gain.linearRampToValueAtTime(0.08, endTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, endTime + 1.0);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(endTime); osc.stop(endTime + 1.1);
+  });
+}
+
+/* ---------- 🎮 8-bit BGM（单次播放，12 秒） ---------- */
+function sfxBgm(){
+  var ac = getAC(), t = ac.currentTime;
+  var melody = [
+    [392, 0.2], [392, 0.2], [440, 0.2], [392, 0.2], [330, 0.2], [294, 0.2],
+    [262, 0.4], [392, 0.2], [392, 0.2],
+    [440, 0.4], [523, 0.2], [440, 0.2], [392, 0.2], [330, 0.2],
+    [294, 0.2], [262, 0.4],
+    [330, 0.2], [392, 0.2], [440, 0.2], [523, 0.2],
+    [494, 0.2], [440, 0.2], [392, 0.4],
+    [349, 0.2], [392, 0.2], [440, 0.2], [523, 0.2],
+    [494, 0.4], [392, 0.4]
+  ];
+  var time = t;
+  melody.forEach(function(n){
+    var osc = trackBgm(ac.createOscillator());
+    var gain = trackBgm(ac.createGain());
+    osc.type = 'square';
+    osc.frequency.value = n[0];
+    gain.gain.setValueAtTime(0, time);
+    gain.gain.linearRampToValueAtTime(0.045, time + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + n[1] * 0.85);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(time); osc.stop(time + n[1]);
+    time += n[1];
+  });
+  var bassPattern = [131, 131, 175, 131, 196, 175, 131, 131,
+                     175, 196, 220, 196, 175, 131, 165, 196,
+                     220, 196, 175, 165, 131, 175, 196, 131];
+  var bt = t;
+  for(var i=0;i<bassPattern.length;i++){
+    var osc = trackBgm(ac.createOscillator());
+    var gain = trackBgm(ac.createGain());
+    osc.type = 'triangle';
+    osc.frequency.value = bassPattern[i];
+    gain.gain.setValueAtTime(0, bt);
+    gain.gain.linearRampToValueAtTime(0.035, bt + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, bt + 0.18);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(bt); osc.stop(bt + 0.2);
+    bt += 0.25;
+  }
+}
+
+/* ---------- 🎵 BGM 单次播放 ---------- */
+function playBgmOnce(){
+  stopBgmNodes();
+  try{ sfxBgm(); }catch(e){ console.warn('bgm error', e); }
+}
+
+/* ---------- 💒 婚礼进行曲（门德尔松，C 大调简化版） ---------- */
+function sfxWedding(){
+  var ac = getAC(), t = ac.currentTime;
+
+  function note(freq, start, dur, type, vol){
+    var osc = trackAudio(ac.createOscillator());
+    var gain = trackAudio(ac.createGain());
+    osc.type = type || 'triangle';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(vol, start + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(start); osc.stop(start + dur);
+  }
+
+  var G4=392, C5=523.25, D5=587.33, E5=659.25,
+      G5=783.99, B5=987.77, C6=1046.5, D6=1174.66;
+
+  /* 主旋律 */
+  var melody = [
+    [G4, 0.15], [G4, 0.15], [G4, 0.15], [C5, 0.75],
+    [G4, 0.15], [G4, 0.15], [G4, 0.15], [C5, 0.75],
+    [E5, 0.15], [G5, 0.15], [C6, 0.3], [G5, 0.15],
+    [D5, 0.15], [G5, 0.15], [B5, 0.3], [D6, 0.15],
+    [C6, 1.2]
+  ];
+  var mt = t;
+  melody.forEach(function(n){
+    note(n[0], mt, n[1] * 0.92, 'square', 0.11);
+    mt += n[1];
+  });
+
+  /* 管风琴低音 */
+  var bass = [
+    [261.63, 0.6], [261.63, 0.6], [261.63, 0.6], [261.63, 0.6],
+    [174.61, 0.6], [174.61, 0.6], [196.00, 0.6], [196.00, 0.6],
+    [261.63, 1.2]
+  ];
+  var bt = t;
+  bass.forEach(function(n){
+    note(n[0], bt, n[1] * 0.9, 'triangle', 0.07);
+    bt += n[1];
+  });
+}
+
+/* ---------- ⛸️ 勃拉姆斯圆舞曲 Op.39 No.15（降A大调） ---------- */
+function sfxWaltz(){
+  var ac = getAC(), t = ac.currentTime;
+  var beat = 0.44;
+
+  function note(freq, start, dur, type, vol){
+    if(!freq) return;
+    var osc = trackAudio(ac.createOscillator());
+    var gain = trackAudio(ac.createGain());
+    osc.type = type || 'square';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(vol, start + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(start); osc.stop(start + dur);
+  }
+
+  var Ab3=207.65, Db3=138.59, Eb3=155.56,
+      C4=261.63, Db4=277.18, Eb4=311.13, F4=349.23,
+      G4=392.00, Ab4=415.30, Bb4=466.16,
+      C5=523.25, Db5=554.37, Eb5=622.25;
+
+  var melody = [
+    [Eb5, 1],
+    [Ab4, 1], [Bb4, 1], [C5, 1],
+    [Db5, 2], [C5, 1],
+    [Bb4, 2], [Ab4, 1],
+    [G4, 1], [F4, 1], [Eb4, 1],
+    [F4, 2], [Eb4, 1],
+    [F4, 1], [G4, 1], [Ab4, 1],
+    [Bb4, 2], [Ab4, 1],
+    [Ab4, 3]
+  ];
+
+  var mt = t;
+  melody.forEach(function(n){
+    note(n[0], mt, n[1] * beat * 0.92, 'square', 0.09);
+    mt += n[1] * beat;
+  });
+
+  var chords = [
+    {bass: Ab3, notes: [C4, Eb4]},
+    {bass: Db3, notes: [F4, Ab4]},
+    {bass: Eb3, notes: [G4, Bb4]},
+    {bass: Ab3, notes: [C4, Eb4]},
+    {bass: Db3, notes: [F4, Ab4]},
+    {bass: Ab3, notes: [C4, Eb4]},
+    {bass: Db3, notes: [F4, Ab4]},
+    {bass: Eb3, notes: [G4, Bb4]},
+    {bass: Ab3, notes: [C4, Eb4]}
+  ];
+
+  var ct = t;
+  chords.forEach(function(ch){
+    note(ch.bass, ct, beat * 0.9, 'triangle', 0.06);
+    note(ch.notes[0], ct + beat, beat * 0.7, 'triangle', 0.035);
+    note(ch.notes[1], ct + beat, beat * 0.7, 'triangle', 0.035);
+    note(ch.notes[0], ct + beat * 2, beat * 0.7, 'triangle', 0.035);
+    note(ch.notes[1], ct + beat * 2, beat * 0.7, 'triangle', 0.035);
+    ct += beat * 3;
+  });
+}
+
+/* ---------- ❤️ 爱心温馨琶音 ---------- */
+function sfxHeart(){
+  var ac = getAC(), t = ac.currentTime;
+  var notes = [523, 659, 784, 1047, 784, 659];
+  notes.forEach(function(freq, i){
+    var start = t + i * 0.25;
+    var osc = trackAudio(ac.createOscillator());
+    var gain = trackAudio(ac.createGain());
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, start);
+    gain.gain.linearRampToValueAtTime(0.1, start + 0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + 0.5);
+    osc.connect(gain).connect(ac.destination);
+    osc.start(start); osc.stop(start + 0.6);
+  });
+}
+
+var SFX_MAP = {
+  space: sfxSpace,
+  baby: sfxBaby,
+  wind: sfxWind,
+  award: sfxAward,
+  boom: sfxBoom,
+  shutter: sfxShutter,
+  mario: sfxMario,
+  waltz: sfxWaltz,
+  wedding: sfxWedding,
+  heart: sfxHeart
+};
+
+function playSfx(name){
+  if(!name) return;
+  if(name === lastSfx) return;
+  lastSfx = name;
+  stopAllSounds();
+  var fn = SFX_MAP[name];
+  if(fn){
+    try{ fn(); }catch(e){ console.warn('sfx error', e); }
+  }
+}
+
+/* ============================================================
+   原有渲染代码
+   ============================================================ */
 var FRAME_MS = 400;
 var SIZE = 480;
 var BABY_SIZE = 600;
@@ -764,7 +1255,8 @@ var STEPS = [
   /* ===== 章节 0 ===== */
   { type:'chapter', num:'0', name:'出生' },
   { bg:'space', title:'0 · 出生',
-    narr:'1995年10月30日，地球诞生45.5亿年，恐龙灭绝6600万年后，一个婴儿横空出世。' },
+    narr:'1995年10月30日，地球诞生45.5亿年，恐龙灭绝6600万年后，一个婴儿横空出世。',
+    sfx:'space' },
   { bg:'space', title:'0 · 出生',
     actors:[{id:'mom',pos:0.25},{id:'dad',pos:0.75,size:DAD_SIZE}] },
   { bg:'space', title:'0 · 出生',
@@ -772,7 +1264,8 @@ var STEPS = [
       {id:'mom',pos:0.25},
       {id:'minfant',pos:0.5,size:BABY_SIZE,drop:true},
       {id:'dad',pos:0.75,size:DAD_SIZE}
-    ] },
+    ],
+    sfx:'baby' },
   { bg:'home', title:'0 · 出生',
     actors:[{id:'mom',pos:0.25},{id:'minfant',pos:0.5,size:BABY_SIZE},{id:'dad',pos:0.75,size:DAD_SIZE}],
     narr:'罗女士和董先生端详许久……翻书许久……' },
@@ -798,7 +1291,8 @@ var STEPS = [
       {id:'minfant',pos:0.5,size:380,noBob:true},
       {id:'mom',pos:0.5,orbit:true}
     ],
-    fx:['orbit','sweep'] },
+    fx:['orbit','sweep'],
+    sfx:'wind' },
   { bg:'stageSpotlight', title:'1 · 妈妈',
     actors:[{id:'me',pos:0.5}],
     narr:'终于拉扯大了。' },
@@ -855,13 +1349,15 @@ var STEPS = [
   { bg:'livingApple', title:'1 · 妈妈',
     actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
     bubble:{who:'meboy', text:'……'},
-    fx:['fruit','appleboom'] },
+    fx:['fruit','appleboom'],
+    sfx:'boom' },
   { bg:'livingApple', title:'1 · 妈妈',
     actors:[{id:'meboy',pos:0.42},{id:'mom',pos:0.58}],
     narr:'小事逼一下会变大，但爱从不爆炸。' },
   { bg:'living', title:'1 · 妈妈',
     narr:'所以居家无非，循礼保护着我们的温暖，礼不扰人。',
-    fx:['heart'] },
+    fx:['heart'],
+    sfx:'heart' },
 
   /* ===== 章节 2 ===== */
   { type:'chapter', num:'2', name:'爸爸' },
@@ -941,11 +1437,14 @@ var STEPS = [
   { bg:'iceRiver', title:'3 · Lang · 冰上烟花',
     actors:[{id:'me',pos:0.44,skate:true},{id:'lang',pos:0.56,skate:true}],
     narr:'当然也有浪漫时刻。比如，新年夜的冰河，烟花朵朵绽放...',
-    fx:['fireworks','snow'] },
+    fx:['fireworks','snow'],
+    bgmPause:true,
+    sfx:'waltz' },
   { bg:'spring', title:'3 · Lang · 立春为契',
     actors:[{id:'me',pos:0.42},{id:'lang',pos:0.58}],
     narr:'于是，众所周知，我们签字画押，立春为契，要把四季的美好留在日常的点滴中。',
-    fx:['petals','cert'] },
+    fx:['petals','cert'],
+    sfx:'wedding' },
 
   /* ===== 章节 4 ===== */
   { type:'chapter', num:'4', name:'阿姨' },
@@ -1002,7 +1501,8 @@ var STEPS = [
   { bg:'awardBg', title:'4 · 邱女士 · 奖状',
     actors:[{id:'melody',pos:0.5}],
     narr:'好想发个奖状给她。',
-    fx:['award'] },
+    fx:['award'],
+    sfx:'award' },
 
   /* ===== 章节 5 ===== */
   { type:'chapter', num:'', name:'小董的一小家子就是以上啦。' },
@@ -1122,14 +1622,12 @@ function startAnim(imgEl, frames, fallback){
   animTimers.push(t);
 }
 
-/* 全清（含水果） */
 function clearFx(){
   var old = stage.querySelectorAll('.snow,.fw,.petal,.bag,.umbrella,.award-fx,.cert-fx,.prop,.boom,.apple,.orbit-sweep,.scarf,.heart,.starlight,.fruit');
   for(var i=0;i<old.length;i++) old[i].parentNode.removeChild(old[i]);
   if(fwInterval){ clearInterval(fwInterval); fwInterval = null; }
 }
 
-/* 只清瞬时（保留 fruit） */
 function clearTransientFx(){
   var old = stage.querySelectorAll('.snow,.fw,.petal,.bag,.umbrella,.award-fx,.cert-fx,.prop,.boom,.apple,.orbit-sweep,.scarf,.heart,.starlight');
   for(var i=0;i<old.length;i++) old[i].parentNode.removeChild(old[i]);
@@ -1141,7 +1639,6 @@ function startOrbit(orbitEl, centerEl){
   if(orbitRAF){ cancelAnimationFrame(orbitRAF); orbitRAF = null; }
   var st = stage.getBoundingClientRect();
   var cr = centerEl.getBoundingClientRect();
-  /* 用婴儿上半身作为圆心 */
   var cx = cr.left - st.left + cr.width / 2;
   var cy = cr.top - st.top + cr.height * 0.35;
 
@@ -1294,6 +1791,9 @@ function chooseOpt(key, i){
   replyScreen.innerHTML = html;
 
   if(o.ok){
+    /* 答对：播放 BGM */
+    stopAllSounds();
+    playBgmOnce();
     document.getElementById('rbRetry').onclick = function(ev){
       ev.stopPropagation();
       replyScreen.classList.add('hidden');
@@ -1320,16 +1820,12 @@ function showFamilyPhoto(){
   famPhotoBg.classList.remove('grow');
   famGroup.style.transform = 'translate(-50%,-50%) scale(1)';
 
-  /* 人物大小 480 */
   var PS = 480;
 
-  /* 坐标基于 group 中心（0,0） */
   var people = [
-    /* 后排先加（z-index 1）：父 母 阿姨 */
     {id:'dad',    x: -160, y:  70, size: PS, z: 1, delay: 0},
     {id:'mom',    x:    0, y:  70, size: PS, z: 1, delay: 1},
     {id:'melody', x:  180, y:  80, size: PS, z: 1, delay: 2},
-    /* 前排后加（z-index 2）：我 lang */
     {id:'me',     x: -110, y: 220, size: PS, z: 2, delay: 3},
     {id:'lang',   x:  110, y: 220, size: PS, z: 2, delay: 4}
   ];
@@ -1355,19 +1851,22 @@ function showFamilyPhoto(){
     }, 200 + p.delay * 150);
   });
 
-  /* 相纸从背后逐渐变大 */
   setTimeout(function(){
     famPhotoBg.classList.add('grow');
+    stopAllSounds();
+    sfxShutter();
   }, 1200);
 
-  /* 定格后整体缩小 */
   setTimeout(function(){
     famGroup.style.transform = 'translate(-50%,-50%) scale(0.85)';
   }, 3000);
 
-  /* 点击变白 */
   familyLayer.onclick = function(){
     familyLayer.onclick = null;
+    stopAllSounds();
+    stopBgmNodes();
+    bgmEnabled = false;
+    sfxMario();
     whiteOut.classList.add('show');
     setTimeout(function(){ finalText.classList.add('show'); }, 1800);
   };
@@ -1386,7 +1885,6 @@ function showStep(s){
   bubble.className = '';
   stopAllAnims();
 
-  /* 清特效：若新场景还要水果，不清水果；否则全清 */
   if(s.fx && s.fx.indexOf('fruit') >= 0){
     clearTransientFx();
   } else {
@@ -1410,7 +1908,6 @@ function showStep(s){
     if(a.drop) cls += ' drop';
     el.className = cls;
     el.style.left = (a.pos * 100) + '%';
-    /* bottom 计算：默认 -10%，父亲更靠下 -20% */
     var bottomOffset = -10;
     if(a.id === 'dad') bottomOffset = -20;
     if(a.slant) bottomOffset = (-2 + a.pos * 25);
@@ -1452,6 +1949,24 @@ function showStep(s){
   if(s.fx && s.fx.indexOf('sweep') >= 0) spawnSweep();
   if(s.fx && s.fx.indexOf('scarf') >= 0) spawnScarf();
   if(s.fx && s.fx.indexOf('heart') >= 0) spawnHeart();
+
+  /* BGM：只在每章第一幕（章节 1/2/3/4 的开场页）播一次 */
+  var prevStep = STEPS[idx - 1];
+  var isChapterOpening = prevStep &&
+    prevStep.type === 'chapter' &&
+    prevStep.num && prevStep.num !== '0';
+  if(bgmEnabled && isChapterOpening && !s.bgmPause){
+    playBgmOnce();
+  } else {
+    stopBgmNodes();
+  }
+
+  /* 场景专属音效 */
+  if(s.sfx){
+    setTimeout(function(){ playSfx(s.sfx); }, 200);
+  } else {
+    lastSfx = null;
+  }
 
   clearTimeout(timer);
   if(s.bubble){
@@ -1650,7 +2165,6 @@ function spawnNotebook(){
     setTimeout(function(){ nb.style.opacity = 1; }, 50);
   }, 1000);
 }
-
 function spawnLaptop(){
   setTimeout(function(){
     var lp = document.createElement('div');
@@ -1815,11 +2329,19 @@ function render(i){
 }
 
 function next(){
+  if(!bgmEnabled){
+    bgmEnabled = true;
+    getAC();
+  }
   if(idx >= STEPS.length - 1) return;
   render(idx + 1);
 }
 
 function prev(){
+  if(!bgmEnabled){
+    bgmEnabled = true;
+    getAC();
+  }
   if(idx <= 0) return;
   render(idx - 1);
 }
